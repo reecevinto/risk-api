@@ -1,4 +1,4 @@
-# Placeholder for later (JWT, hashing, API keys)
+import secrets
 
-def dummy_security():
-    return True
+def generate_api_key():
+    return secrets.token_hex(32)
