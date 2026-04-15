@@ -2,11 +2,13 @@ from fastapi import FastAPI
 from app.api.routes import risk, auth
 from app.api.routes import risk, auth, phone
 from app.api.routes import email
+from app.api.routes import ip
 
 app = FastAPI(title="Risk Intelligence API")
 
 app.include_router(phone.router, prefix="/phone", tags=["Phone Intelligence"])
 app.include_router(email.router, prefix="/email", tags=["Email Intelligence"])
+app.include_router(ip.router, prefix="/ip", tags=["IP Intelligence"])
 
 
 
