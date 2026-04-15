@@ -1,7 +1,12 @@
 from fastapi import FastAPI
 from app.api.routes import risk, auth
+from app.api.routes import risk, auth, phone
 
 app = FastAPI(title="Risk Intelligence API")
+
+app.include_router(phone.router, prefix="/phone", tags=["Phone Intelligence"])
+
+
 
 
 # 🔹 Public routes

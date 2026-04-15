@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.user import User
 from app.models.api_key import APIKey
-from app.core.security import generate_api_key
+from app.core.security import generate_api_key, get_current_user
 
 router = APIRouter()
 
@@ -16,7 +16,7 @@ def test_auth():
 
 
 # ============================================================
-# 🔥 Generate API Key (FIXED ROUTE)
+# 🔥 Generate API Key
 # ============================================================
 @router.post("/generate-key/{user_id}")
 def generate_api_key_route(
@@ -26,10 +26,7 @@ def generate_api_key_route(
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found"
-        )
+        raise HTTPException(status_code=404, detail="User not found")
 
     api_key_value = generate_api_key()
 
@@ -45,32 +42,17 @@ def generate_api_key_route(
     return {
         "api_key": api_key_value,
         "user_id": user.id,
-        "message": "Store this key securely, it will not be shown again"
+        "message": "Store this key securely"
     }
 
 
 # ============================================================
-# 🔐 Protected endpoint (FIXED VERSION)
+# 🔐 Protected endpoint (CLEAN + REUSABLE)
 # ============================================================
 @router.get("/protected")
 def protected_route(
-    x_api_key: str = Header(...),
-    db: Session = Depends(get_db)
+    user: User = Depends(get_current_user)
 ):
-    # Validate API key
-    key_record = db.query(APIKey).filter(
-        APIKey.key == x_api_key
-    ).first()
-
-    if not key_record:
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
-    # Get user linked to API key
-    user = db.query(User).filter(User.id == key_record.user_id).first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
     return {
         "message": "Access granted",
         "user": {
