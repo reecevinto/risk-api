@@ -7,3 +7,4 @@ alembic
 phonenumbers
 dnspython
 requests
+email-validator
