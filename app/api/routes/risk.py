@@ -10,6 +10,7 @@ from app.services.phone_service import analyze_phone
 from app.services.email_service import analyze_email
 from app.services.ip_service import analyze_ip
 from app.services.risk_engine import compute_risk
+from app.services.log_service import log_request
 
 router = APIRouter()
 
@@ -67,6 +68,16 @@ def score_risk(
         email_data=email_data,
         ip_data=ip_data
     )
+
+    # 🔥 LOG THE REQUEST
+    log_request(
+    db=db,
+    user_id=user.id,
+    email=payload.email,
+    phone=payload.phone,
+    ip=payload.ip,
+    risk=risk
+   )
 
     return {
         "input": payload.dict(),
