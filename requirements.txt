@@ -8,3 +8,4 @@ phonenumbers
 dnspython
 requests
 email-validator
+redis

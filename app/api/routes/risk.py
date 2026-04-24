@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.api.routes.auth import get_current_user
 
+from app.models import user
 from app.schemas.risky import RiskRequest
 
 from app.services.phone_service import analyze_phone
@@ -11,6 +12,9 @@ from app.services.email_service import analyze_email
 from app.services.ip_service import analyze_ip
 from app.services.risk_engine import compute_risk
 from app.services.log_service import log_request
+from fastapi import HTTPException
+from app.services.rate_limiter import check_rate_limit
+
 
 router = APIRouter()
 
@@ -59,26 +63,37 @@ def score_risk(
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
+
+    # 🔥 STEP 1: RATE LIMIT CHECK (MUST BE FIRST)
+    if not check_rate_limit(user.id):
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Try again later."
+        )
+
+    # 🔥 STEP 2: ANALYZE INPUTS
     phone_data = analyze_phone(payload.phone) if payload.phone else None
     email_data = analyze_email(payload.email) if payload.email else None
     ip_data = analyze_ip(payload.ip) if payload.ip else None
 
+    # 🔥 STEP 3: COMPUTE RISK
     risk = compute_risk(
         phone_data=phone_data,
         email_data=email_data,
         ip_data=ip_data
     )
 
-    # 🔥 LOG THE REQUEST
+    # 🔥 STEP 4: LOG REQUEST (FIXED)
     log_request(
-    db=db,
-    user_id=user.id,
-    email=payload.email,
-    phone=payload.phone,
-    ip=payload.ip,
-    risk=risk
-   )
+        db=db,
+        user_id=user.id,
+        email=payload.email,
+        phone=payload.phone,
+        ip=payload.ip,
+        risk=risk
+    )
 
+    # 🔥 STEP 5: RETURN RESPONSE
     return {
         "input": payload.dict(),
         "phone_analysis": phone_data,
