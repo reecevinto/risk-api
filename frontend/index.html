@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Risk Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 p-8">
+
+  <div class="max-w-4xl mx-auto">
+
+    <h1 class="text-3xl font-bold mb-6">🚀 Risk API Dashboard</h1>
+
+    <!-- STATUS -->
+    <div id="status" class="mb-4 text-sm text-gray-600">Loading dashboard...</div>
+
+    <!-- API KEY -->
+    <div class="bg-white p-4 rounded shadow mb-6">
+      <h2 class="text-xl font-semibold mb-2">API Key</h2>
+      <p id="apiKey" class="text-green-600 font-mono break-all">...</p>
+    </div>
+
+    <!-- USAGE STATS -->
+    <div class="bg-white p-4 rounded shadow mb-6">
+      <h2 class="text-xl font-semibold mb-2">Usage</h2>
+      <p>Total Requests: <span id="total">0</span></p>
+      <p>Average Risk Score: <span id="avg">0</span></p>
+    </div>
+
+    <!-- RECENT REQUESTS -->
+    <div class="bg-white p-4 rounded shadow">
+      <h2 class="text-xl font-semibold mb-2">Recent Requests</h2>
+      <ul id="recent" class="space-y-2"></ul>
+    </div>
+
+  </div>
+
+<script>
+const API_KEY = "639479ab632caf8889314ec41841c653f662d17ac9e95324f99119100875e864";
+
+async function loadDashboard() {
+  const statusEl = document.getElementById("status");
+
+  try {
+    // 🔹 Fetch user info
+    const userRes = await fetch("http://localhost:8000/user/me", {
+      headers: { "x-api-key": API_KEY }
+    });
+
+    if (!userRes.ok) throw new Error("Failed to fetch user info");
+
+    const user = await userRes.json();
+
+    document.getElementById("apiKey").innerText =
+      user.api_key || "No API key returned";
+
+    // 🔹 Fetch usage
+    const usageRes = await fetch("http://localhost:8000/admin/usage", {
+      headers: { "x-api-key": API_KEY }
+    });
+
+    if (!usageRes.ok) throw new Error("Failed to fetch usage");
+
+    const usage = await usageRes.json();
+
+    document.getElementById("total").innerText =
+      usage.total_requests ?? 0;
+
+    document.getElementById("avg").innerText =
+      usage.average_risk_score
+        ? usage.average_risk_score.toFixed(2)
+        : "0.00";
+
+    // 🔹 Recent requests
+    const list = document.getElementById("recent");
+    list.innerHTML = "";
+
+    if (!usage.recent_requests || usage.recent_requests.length === 0) {
+      list.innerHTML = "<li class='text-gray-500'>No requests yet</li>";
+    } else {
+      usage.recent_requests.forEach(r => {
+        const item = document.createElement("li");
+        item.className = "border p-2 rounded bg-gray-50";
+
+        item.innerText = `${r.email || "N/A"} | ${r.ip || "N/A"} | Score: ${r.risk_score}`;
+
+        list.appendChild(item);
+      });
+    }
+
+    statusEl.innerText = "✅ Dashboard loaded successfully";
+
+  } catch (error) {
+    console.error(error);
+    statusEl.innerText = "❌ Error loading dashboard (check API / CORS)";
+  }
+}
+
+loadDashboard();
+</script>
+
+</body>
+</html>
