@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.base import Base
@@ -14,6 +14,7 @@ class User(Base):
     name = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+    plan_id = Column(Integer, ForeignKey("plans.id"))
 
     # 🔥 Day 3 addition: link to API keys
     api_keys = relationship("APIKey", back_populates="user", cascade="all, delete-orphan")

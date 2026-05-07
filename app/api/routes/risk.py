@@ -15,6 +15,9 @@ from app.services.log_service import log_request
 from fastapi import HTTPException
 from app.services.rate_limiter import check_rate_limit
 
+from app.services.billing_service import check_usage_limit
+
+
 
 router = APIRouter()
 
@@ -62,28 +65,36 @@ def score_risk(
     payload: RiskRequest,
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
+    
 ):
+     # 🔥 STEP 1: BILLING / PLAN LIMIT CHECK
+    if not check_usage_limit(db, user):
+        raise HTTPException(
+            status_code=403,
+            detail="Monthly usage limit exceeded. Upgrade your plan."
+        )
 
-    # 🔥 STEP 1: RATE LIMIT CHECK (MUST BE FIRST)
+
+    # 🔥 STEP 2: RATE LIMIT CHECK (MUST BE FIRST)
     if not check_rate_limit(user.id):
         raise HTTPException(
             status_code=429,
             detail="Rate limit exceeded. Try again later."
         )
 
-    # 🔥 STEP 2: ANALYZE INPUTS
+    # 🔥 STEP 3: ANALYZE INPUTS
     phone_data = analyze_phone(payload.phone) if payload.phone else None
     email_data = analyze_email(payload.email) if payload.email else None
     ip_data = analyze_ip(payload.ip) if payload.ip else None
 
-    # 🔥 STEP 3: COMPUTE RISK
+    # 🔥 STEP 4: COMPUTE RISK
     risk = compute_risk(
         phone_data=phone_data,
         email_data=email_data,
         ip_data=ip_data
     )
 
-    # 🔥 STEP 4: LOG REQUEST (FIXED)
+    # 🔥 STEP 5: LOG REQUEST (FIXED)
     log_request(
         db=db,
         user_id=user.id,
@@ -93,7 +104,7 @@ def score_risk(
         risk=risk
     )
 
-    # 🔥 STEP 5: RETURN RESPONSE
+    # 🔥 STEP 6: RETURN RESPONSE
     return {
         "input": payload.dict(),
         "phone_analysis": phone_data,
