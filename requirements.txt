@@ -9,3 +9,4 @@ dnspython
 requests
 email-validator
 redis
+stripe

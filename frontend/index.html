@@ -21,6 +21,25 @@
       <p id="apiKey" class="text-green-600 font-mono break-all">...</p>
     </div>
 
+    <!-- BILLING -->
+    <div class="bg-white p-4 rounded shadow mb-6">
+      <h2 class="text-xl font-semibold mb-2">Billing</h2>
+
+      <div class="flex gap-4">
+        <button onclick="upgradeToPro()"
+          class="bg-black text-white px-4 py-2 rounded hover:bg-gray-800">
+          💳 Upgrade to Pro
+        </button>
+
+        <button onclick="upgradeToEnterprise()"
+          class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">
+          🏢 Upgrade to Enterprise
+        </button>
+      </div>
+
+      <p id="billingStatus" class="text-sm text-gray-500 mt-2"></p>
+    </div>
+
     <!-- USAGE STATS -->
     <div class="bg-white p-4 rounded shadow mb-6">
       <h2 class="text-xl font-semibold mb-2">Usage</h2>
@@ -37,6 +56,7 @@
   </div>
 
 <script>
+
 const API_KEY = "639479ab632caf8889314ec41841c653f662d17ac9e95324f99119100875e864";
 
 async function loadDashboard() {
@@ -98,6 +118,63 @@ async function loadDashboard() {
 }
 
 loadDashboard();
+
+/* ============================================================
+   BILLING - PRO UPGRADE
+============================================================ */
+async function upgradeToPro() {
+  const statusEl = document.getElementById("billingStatus");
+  statusEl.innerText = "Creating Pro checkout session...";
+
+  try {
+    const res = await fetch("http://localhost:8000/billing/checkout/pro", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY
+      }
+    });
+
+    if (!res.ok) throw new Error("Failed to create Pro checkout");
+
+    const data = await res.json();
+
+    window.location.href = data.checkout_url;
+
+  } catch (err) {
+    console.error(err);
+    statusEl.innerText = "❌ Failed to start Pro checkout";
+  }
+}
+
+/* ============================================================
+   BILLING - ENTERPRISE UPGRADE
+============================================================ */
+async function upgradeToEnterprise() {
+  const statusEl = document.getElementById("billingStatus");
+  statusEl.innerText = "Creating Enterprise checkout session...";
+
+  try {
+    const res = await fetch("http://localhost:8000/billing/checkout/enterprise", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY
+      }
+    });
+
+    if (!res.ok) throw new Error("Failed to create Enterprise checkout");
+
+    const data = await res.json();
+
+    window.location.href = data.checkout_url;
+
+  } catch (err) {
+    console.error(err);
+    statusEl.innerText = "❌ Failed to start Enterprise checkout";
+  }
+}
+
 </script>
 
 </body>

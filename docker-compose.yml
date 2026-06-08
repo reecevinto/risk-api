@@ -10,6 +10,9 @@ services:
       - db
       - redis
     restart: always
+     # 🔥 ADD THIS LINE
+    volumes:
+      - .:/app
 
   db:
     image: postgres:15
