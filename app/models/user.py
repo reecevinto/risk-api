@@ -14,7 +14,30 @@ class User(Base):
     name = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Current billing plan
     plan_id = Column(Integer, ForeignKey("plans.id"))
 
-    # 🔥 Day 3 addition: link to API keys
-    api_keys = relationship("APIKey", back_populates="user", cascade="all, delete-orphan")
+    # Stripe customer mapping
+    stripe_customer_id = Column(
+        String,
+        unique=True,
+        nullable=True
+    )
+
+    # Relationships
+    api_keys = relationship(
+        "APIKey",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+
+    plan = relationship(
+        "Plan"
+    )
+
+    subscriptions = relationship(
+        "Subscription",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
