@@ -34,10 +34,28 @@ def get_me(
             .first()
 
     # 🔥 get latest subscription (Stripe lifecycle)
+    # 👉 DAY 3 UPDATE: this is now SOURCE OF TRUTH (state engine)
     subscription = db.query(Subscription)\
         .filter(Subscription.user_id == user.id)\
         .order_by(Subscription.id.desc())\
         .first()
+
+    # ============================
+    # 🧠 DAY 3 PHASE 2 ADDITION
+    # SUBSCRIPTION STATE ENGINE
+    # ============================
+
+    # Normalize response state (single truth rule)
+    if subscription:
+        subscription_status = subscription.status
+        current_plan = subscription.current_plan
+        stripe_subscription_id = subscription.stripe_subscription_id
+        current_period_end = subscription.current_period_end
+    else:
+        subscription_status = "none"
+        current_plan = "FREE"
+        stripe_subscription_id = None
+        current_period_end = None
 
     # ============================
     # RESPONSE (ENHANCED)
@@ -53,18 +71,32 @@ def get_me(
         # DAY 1 PHASE 2 ADDITIONS
         # ============================
 
-        # 🧠 PLAN SYSTEM
+        # 🧠 PLAN SYSTEM (now derived from subscription engine)
         "plan": plan.name if plan else "FREE",
         "plan_id": user.plan_id,
 
         # 💳 STRIPE IDENTITY
         "stripe_customer_id": getattr(user, "stripe_customer_id", None),
 
-        # 📦 SUBSCRIPTION STATE
+        # ============================
+        # 🧠 DAY 3 PHASE 2 ADDITION
+        # SINGLE SOURCE OF TRUTH STATE
+        # ============================
+
         "subscription": {
-            "status": subscription.status if subscription else "none",
-            "current_plan": subscription.current_plan if subscription else "FREE",
-            "stripe_subscription_id": subscription.stripe_subscription_id if subscription else None,
-            "current_period_end": subscription.current_period_end if subscription else None
+            # CORE STATE ENGINE (IMPORTANT)
+            "status": subscription_status,   # active / trialing / past_due / canceled
+
+            # PLAN VIEW (derived from subscription record)
+            "current_plan": current_plan,
+
+            # STRIPE LINKAGE
+            "stripe_subscription_id": stripe_subscription_id,
+
+            # BILLING TIMING
+            "current_period_end": current_period_end,
+
+            # DERIVED FLAG (useful for frontend)
+            "is_active": subscription_status == "active"
         }
     }

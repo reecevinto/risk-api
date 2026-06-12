@@ -90,7 +90,7 @@ async function loadDashboard() {
       user.plan || "FREE";
 
     document.getElementById("subStatus").innerText =
-      user.subscription_status || "NO SUBSCRIPTION";
+      user.subscription?.status || "NO SUBSCRIPTION";
 
     document.getElementById("stripeStatus").innerText =
       user.stripe_customer_id ? "LINKED" : "NOT LINKED";

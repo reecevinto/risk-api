@@ -8,6 +8,14 @@ from app.db.session import get_db
 from app.models.user import User
 from app.models.subscription import Subscription
 
+from app.core.subscription_states import (
+    ACTIVE,
+    TRIALING,
+    PAST_DUE,
+    CANCELED,
+    normalize_stripe_status
+)
+
 router = APIRouter()
 
 STRIPE_SECRET = os.getenv("STRIPE_SECRET_KEY")
@@ -17,13 +25,47 @@ stripe.api_key = STRIPE_SECRET
 
 
 # ============================================================
-# MAIN STRIPE WEBHOOK ENTRYPOINT
+# SAFE HELPERS (NEW - NON-BREAKING)
+# ============================================================
+def safe_get(obj, key, default=None):
+    """
+    Stripe objects can behave inconsistently.
+    This prevents AttributeError crashes.
+    """
+    try:
+        return getattr(obj, key, default)
+    except Exception:
+        return default
+
+
+def sync_user_plan(db: Session, user: User):
+    """
+    Single source of truth rule:
+    subscription drives user plan
+    """
+
+    latest_sub = (
+        db.query(Subscription)
+        .filter(Subscription.user_id == user.id)
+        .order_by(Subscription.id.desc())
+        .first()
+    )
+
+    if not latest_sub:
+        user.plan_id = 1  # FREE
+        return
+
+    if latest_sub.status in [ACTIVE, TRIALING]:
+        user.plan_id = 2  # PRO
+    else:
+        user.plan_id = 1  # FREE downgrade
+
+
+# ============================================================
+# MAIN WEBHOOK
 # ============================================================
 @router.post("/stripe")
-async def stripe_webhook(
-    request: Request,
-    db: Session = Depends(get_db)
-):
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
@@ -35,10 +77,7 @@ async def stripe_webhook(
             WEBHOOK_SECRET
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=400, detail=str(e))
 
     event_type = event["type"]
     data = event["data"]["object"]
@@ -50,55 +89,30 @@ async def stripe_webhook(
     # ============================================================
     if event_type == "checkout.session.completed":
 
-        stripe_customer_id = getattr(
-            data,
-            "customer",
-            None
-        )
+        customer_id = safe_get(data, "customer")
 
         user = db.query(User).filter(
-            User.stripe_customer_id == stripe_customer_id
+            User.stripe_customer_id == customer_id
         ).first()
 
         if user:
 
-            # PRO PLAN ID
-            user.plan_id = 2
+            user.plan_id = 2  # temporary until subscription sync
 
             db.commit()
 
-            print(
-                f"✅ Checkout completed for user {user.email}"
-            )
+            print(f"✅ Checkout completed for {user.email}")
+
 
     # ============================================================
     # 2. SUBSCRIPTION CREATED
     # ============================================================
     elif event_type == "customer.subscription.created":
 
-        customer_id = getattr(
-            data,
-            "customer",
-            None
-        )
-
-        sub_id = getattr(
-            data,
-            "id",
-            None
-        )
-
-        status = getattr(
-            data,
-            "status",
-            "active"
-        )
-
-        period_end = getattr(
-            data,
-            "current_period_end",
-            None
-        )
+        customer_id = safe_get(data, "customer")
+        sub_id = safe_get(data, "id")
+        status = normalize_stripe_status(safe_get(data, "status"))
+        period_end = safe_get(data, "current_period_end")
 
         user = db.query(User).filter(
             User.stripe_customer_id == customer_id
@@ -125,34 +139,22 @@ async def stripe_webhook(
                 )
 
                 db.add(sub)
+
+                sync_user_plan(db, user)
+
                 db.commit()
 
-                print(
-                    f"✅ Subscription created: {sub_id}"
-                )
+                print(f"✅ Subscription created: {sub_id}")
+
 
     # ============================================================
     # 3. SUBSCRIPTION UPDATED
     # ============================================================
     elif event_type == "customer.subscription.updated":
 
-        sub_id = getattr(
-            data,
-            "id",
-            None
-        )
-
-        status = getattr(
-            data,
-            "status",
-            None
-        )
-
-        period_end = getattr(
-            data,
-            "current_period_end",
-            None
-        )
+        sub_id = safe_get(data, "id")
+        status = normalize_stripe_status(safe_get(data, "status"))
+        period_end = safe_get(data, "current_period_end")
 
         sub = db.query(Subscription).filter(
             Subscription.stripe_subscription_id == sub_id
@@ -162,28 +164,25 @@ async def stripe_webhook(
 
             sub.status = status
 
-            sub.current_period_end = (
-                datetime.fromtimestamp(period_end)
-                if period_end
-                else None
-            )
+            if period_end:
+                sub.current_period_end = datetime.fromtimestamp(period_end)
+
+            # SAFE USER RESOLVE (IMPORTANT FIX)
+            user = db.query(User).filter(User.id == sub.user_id).first()
+            if user:
+                sync_user_plan(db, user)
 
             db.commit()
 
-            print(
-                f"✅ Subscription updated: {sub_id}"
-            )
+            print(f"🔁 Subscription updated: {sub_id}")
+
 
     # ============================================================
     # 4. SUBSCRIPTION DELETED
     # ============================================================
     elif event_type == "customer.subscription.deleted":
 
-        sub_id = getattr(
-            data,
-            "id",
-            None
-        )
+        sub_id = safe_get(data, "id")
 
         sub = db.query(Subscription).filter(
             Subscription.stripe_subscription_id == sub_id
@@ -191,44 +190,74 @@ async def stripe_webhook(
 
         if sub:
 
-            sub.status = "canceled"
+            sub.status = CANCELED
+
+            user = db.query(User).filter(User.id == sub.user_id).first()
+            if user:
+                sync_user_plan(db, user)
 
             db.commit()
 
-            print(
-                f"❌ Subscription cancelled: {sub_id}"
-            )
+            print(f"❌ Subscription cancelled: {sub_id}")
+
 
     # ============================================================
     # 5. INVOICE PAID
     # ============================================================
     elif event_type == "invoice.paid":
 
-        customer_id = getattr(
-            data,
-            "customer",
-            None
-        )
+        customer_id = safe_get(data, "customer")
 
-        print(
-            f"💰 Invoice paid for customer {customer_id}"
-        )
+        user = db.query(User).filter(
+            User.stripe_customer_id == customer_id
+        ).first()
+
+        if user:
+
+            sub = (
+                db.query(Subscription)
+                .filter(Subscription.user_id == user.id)
+                .order_by(Subscription.id.desc())
+                .first()
+            )
+
+            if sub:
+                sub.status = ACTIVE
+
+                sync_user_plan(db, user)
+
+            db.commit()
+
+            print(f"💰 Payment success for {customer_id}")
+
 
     # ============================================================
     # 6. PAYMENT FAILED
     # ============================================================
     elif event_type == "invoice.payment_failed":
 
-        customer_id = getattr(
-            data,
-            "customer",
-            None
-        )
+        customer_id = safe_get(data, "customer")
 
-        print(
-            f"⚠️ Payment failed for customer {customer_id}"
-        )
+        user = db.query(User).filter(
+            User.stripe_customer_id == customer_id
+        ).first()
 
-    return {
-        "status": "success"
-    }
+        if user:
+
+            sub = (
+                db.query(Subscription)
+                .filter(Subscription.user_id == user.id)
+                .order_by(Subscription.id.desc())
+                .first()
+            )
+
+            if sub:
+                sub.status = PAST_DUE
+
+                sync_user_plan(db, user)
+
+            db.commit()
+
+            print(f"⚠️ Payment failed for {customer_id}")
+
+    return {"status": "success"}
