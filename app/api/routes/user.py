@@ -8,13 +8,21 @@ from app.models.api_key import APIKey
 from app.models.subscription import Subscription
 from app.models.plan import Plan
 
+# ============================================================
+# DAY 4 PHASE 2 — METERED BILLING ENGINE
+# ============================================================
+from app.services.metering_service import (
+    get_usage,
+    get_plan_limit
+)
+
 router = APIRouter()
 
 
 @router.get("/me")
 def get_me(
     db: Session = Depends(get_db),
-    user = Depends(get_current_user)
+    user=Depends(get_current_user)
 ):
     # 🔥 get latest API key for this user
     api_key = db.query(APIKey)\
@@ -28,6 +36,7 @@ def get_me(
 
     # 🔥 get plan (FREE / PRO / ENTERPRISE)
     plan = None
+
     if user.plan_id:
         plan = db.query(Plan)\
             .filter(Plan.id == user.plan_id)\
@@ -45,7 +54,6 @@ def get_me(
     # SUBSCRIPTION STATE ENGINE
     # ============================
 
-    # Normalize response state (single truth rule)
     if subscription:
         subscription_status = subscription.status
         current_plan = subscription.current_plan
@@ -56,6 +64,14 @@ def get_me(
         current_plan = "FREE"
         stripe_subscription_id = None
         current_period_end = None
+
+    # ============================
+    # 🧠 DAY 4 PHASE 2 ADDITION
+    # METERED BILLING ENGINE
+    # ============================
+
+    current_usage = get_usage(user.id)
+    usage_limit = get_plan_limit(user)
 
     # ============================
     # RESPONSE (ENHANCED)
@@ -71,12 +87,16 @@ def get_me(
         # DAY 1 PHASE 2 ADDITIONS
         # ============================
 
-        # 🧠 PLAN SYSTEM (now derived from subscription engine)
+        # 🧠 PLAN SYSTEM
         "plan": plan.name if plan else "FREE",
         "plan_id": user.plan_id,
 
         # 💳 STRIPE IDENTITY
-        "stripe_customer_id": getattr(user, "stripe_customer_id", None),
+        "stripe_customer_id": getattr(
+            user,
+            "stripe_customer_id",
+            None
+        ),
 
         # ============================
         # 🧠 DAY 3 PHASE 2 ADDITION
@@ -84,10 +104,10 @@ def get_me(
         # ============================
 
         "subscription": {
-            # CORE STATE ENGINE (IMPORTANT)
-            "status": subscription_status,   # active / trialing / past_due / canceled
+            # CORE STATE ENGINE
+            "status": subscription_status,
 
-            # PLAN VIEW (derived from subscription record)
+            # PLAN VIEW
             "current_plan": current_plan,
 
             # STRIPE LINKAGE
@@ -96,7 +116,32 @@ def get_me(
             # BILLING TIMING
             "current_period_end": current_period_end,
 
-            # DERIVED FLAG (useful for frontend)
-            "is_active": subscription_status == "active"
+            # DERIVED FLAG
+            "is_active": subscription_status in [
+                "active",
+                "trialing"
+            ]
+        },
+
+        # ============================
+        # 🧠 DAY 4 PHASE 2 ADDITION
+        # METERED BILLING DATA
+        # ============================
+
+        "usage": {
+            "current": current_usage,
+            "limit": usage_limit,
+            "remaining": max(
+                0,
+                usage_limit - current_usage
+            ),
+            "percent_used": (
+                round(
+                    (current_usage / usage_limit) * 100,
+                    2
+                )
+                if usage_limit > 0
+                else 0
+            )
         }
     }

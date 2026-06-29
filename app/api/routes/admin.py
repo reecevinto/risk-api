@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.request_log import RequestLog
 from app.api.routes.auth import get_current_user
 from sqlalchemy import func
+from app.services.reconciliation_service import reconcile_usage
 
 router = APIRouter()
 
@@ -42,3 +43,17 @@ def get_usage(
             for r in recent
         ]
     }
+# ============================================================
+# DAY 4 PHASE 2
+# REDIS ↔ POSTGRES RECONCILIATION
+# ============================================================
+
+@router.post("/reconcile")
+def reconcile_metering(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    return reconcile_usage(
+        db=db,
+        user_id=user.id
+    )

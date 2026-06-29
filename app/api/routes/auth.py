@@ -6,6 +6,7 @@ from app.models.user import User
 from app.models.api_key import APIKey
 from app.core.security import generate_api_key, get_current_user
 
+
 router = APIRouter()
 
 

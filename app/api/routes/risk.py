@@ -13,10 +13,16 @@ from app.services.ip_service import analyze_ip
 from app.services.risk_engine import compute_risk
 from app.services.log_service import log_request
 from app.services.rate_limiter import check_rate_limit
-from app.services.billing_service import check_usage_limit
 
-# 🔥 DAY 14 ADDITION (Stripe placeholder integration)
-from app.services.billing_service import get_user_plan
+# ============================================================
+# DAY 4 PHASE 2 — METERED BILLING ENGINE
+# ============================================================
+from app.services.metering_service import (
+    can_make_request,
+    increment_usage,
+    get_usage,
+    get_plan_limit
+)
 
 router = APIRouter()
 
@@ -30,7 +36,7 @@ def analyze_risk(
     email: str = None,
     ip: str = None,
     db: Session = Depends(get_db),
-    user = Depends(get_current_user)
+    user=Depends(get_current_user)
 ):
     phone_data = analyze_phone(phone) if phone else None
     email_data = analyze_email(email) if email else None
@@ -63,31 +69,21 @@ def analyze_risk(
 def score_risk(
     payload: RiskRequest,
     db: Session = Depends(get_db),
-    user = Depends(get_current_user)
+    user=Depends(get_current_user)
 ):
 
     # ========================================================
-    # 🔥 STEP 0 — GET USER PLAN (DAY 14 ADDITION)
+    # 🔥 STEP 0 — BILLING STATE CHECK
+    # DAY 4 PHASE 2
     # ========================================================
-    plan = get_user_plan(db, user)
-
-    if not plan:
+    if not can_make_request(db, user):
         raise HTTPException(
             status_code=403,
-            detail="No active plan found. Please subscribe."
+            detail="Usage limit exceeded or subscription inactive."
         )
 
     # ========================================================
-    # 🔥 STEP 1 — USAGE LIMIT CHECK (BILLING CORE)
-    # ========================================================
-    if not check_usage_limit(db, user):
-        raise HTTPException(
-            status_code=403,
-            detail="Monthly usage limit exceeded. Upgrade your plan."
-        )
-
-    # ========================================================
-    # 🔥 STEP 2 — RATE LIMIT CHECK
+    # 🔥 STEP 1 — RATE LIMIT CHECK
     # ========================================================
     if not check_rate_limit(user.id):
         raise HTTPException(
@@ -96,14 +92,14 @@ def score_risk(
         )
 
     # ========================================================
-    # 🔥 STEP 3 — ANALYZE INPUTS
+    # 🔥 STEP 2 — ANALYZE INPUTS
     # ========================================================
     phone_data = analyze_phone(payload.phone) if payload.phone else None
     email_data = analyze_email(payload.email) if payload.email else None
     ip_data = analyze_ip(payload.ip) if payload.ip else None
 
     # ========================================================
-    # 🔥 STEP 4 — COMPUTE RISK ENGINE
+    # 🔥 STEP 3 — COMPUTE RISK ENGINE
     # ========================================================
     risk = compute_risk(
         phone_data=phone_data,
@@ -112,7 +108,7 @@ def score_risk(
     )
 
     # ========================================================
-    # 🔥 STEP 5 — LOG REQUEST (BILLING TRACKING CRITICAL)
+    # 🔥 STEP 4 — LOG REQUEST (BILLING TRACKING CRITICAL)
     # ========================================================
     log_request(
         db=db,
@@ -122,6 +118,15 @@ def score_risk(
         ip=payload.ip,
         risk=risk
     )
+
+    # ========================================================
+    # 🔥 STEP 5 — METERED BILLING INCREMENT
+    # DAY 4 PHASE 2
+    # ========================================================
+    increment_usage(user.id)
+
+    current_usage = get_usage(user.id)
+    usage_limit = get_plan_limit(user)
 
     # ========================================================
     # 🔥 STEP 6 — RESPONSE (NOW BILLING-AWARE)
@@ -135,10 +140,12 @@ def score_risk(
         "ip_analysis": ip_data,
         "risk_analysis": risk,
 
-        # 🔥 DAY 14 ADDITION
+        # 🔥 DAY 4 PHASE 2 ADDITION
         "billing": {
-            "plan": plan.name,
-            "request_limit": plan.request_limit
+            "plan_id": user.plan_id,
+            "usage": current_usage,
+            "usage_limit": usage_limit,
+            "remaining": max(0, usage_limit - current_usage)
         },
 
         "user": {
