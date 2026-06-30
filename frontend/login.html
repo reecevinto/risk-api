@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0">
+
+    <title>Africa Risk Intelligence API Login</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link
+        rel="stylesheet"
+        href="styles.css">
+
+</head>
+
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+
+    <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-md">
+
+        <h1 class="text-3xl font-bold text-center mb-2">
+
+            🚀 Africa Risk Intelligence API
+
+        </h1>
+
+        <p class="text-center text-gray-500 mb-8">
+
+            Enter your API Key to access the dashboard.
+
+        </p>
+
+        <div class="space-y-4">
+
+            <input
+                id="apiKeyInput"
+                type="text"
+                placeholder="Paste your API Key..."
+                class="w-full border rounded px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+            <button
+                onclick="login()"
+                class="w-full bg-black text-white py-3 rounded hover:bg-gray-800 transition">
+
+                Login
+
+            </button>
+
+        </div>
+
+        <p
+            id="loginStatus"
+            class="mt-4 text-center text-sm text-red-600">
+        </p>
+
+    </div>
+
+    <script>
+
+        function login() {
+
+            const apiKey =
+                document
+                    .getElementById("apiKeyInput")
+                    .value
+                    .trim();
+
+            const status =
+                document.getElementById("loginStatus");
+
+            if (!apiKey) {
+
+                status.innerText =
+                    "Please enter your API Key.";
+
+                return;
+
+            }
+
+            localStorage.setItem(
+                "api_key",
+                apiKey
+            );
+
+            window.location.href =
+                "index.html";
+
+        }
+
+        document
+            .getElementById("apiKeyInput")
+            .addEventListener("keypress", function (event) {
+
+                if (event.key === "Enter") {
+
+                    login();
+
+                }
+
+            });
+
+    </script>
+
+</body>
+
+</html>

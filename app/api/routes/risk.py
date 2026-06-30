@@ -24,6 +24,11 @@ from app.services.metering_service import (
     get_plan_limit
 )
 
+# ============================================================
+# DAY 5 PHASE 2 — BILLING CYCLE RESET
+# ============================================================
+
+
 router = APIRouter()
 
 
@@ -63,7 +68,7 @@ def analyze_risk(
 
 
 # ============================================================
-# 🔥 MAIN PRODUCTION ENDPOINT (DAY 14 ENHANCED)
+# 🔥 MAIN PRODUCTION ENDPOINT
 # ============================================================
 @router.post("/score")
 def score_risk(
@@ -73,8 +78,12 @@ def score_risk(
 ):
 
     # ========================================================
-    # 🔥 STEP 0 — BILLING STATE CHECK
-    # DAY 4 PHASE 2
+    # DAY 5 PHASE 2
+    # ENSURE BILLING CYCLE IS CURRENT
+    # ========================================================
+  
+    # ========================================================
+    # STEP 0 — BILLING STATE CHECK
     # ========================================================
     if not can_make_request(db, user):
         raise HTTPException(
@@ -83,7 +92,7 @@ def score_risk(
         )
 
     # ========================================================
-    # 🔥 STEP 1 — RATE LIMIT CHECK
+    # STEP 1 — RATE LIMIT CHECK
     # ========================================================
     if not check_rate_limit(user.id):
         raise HTTPException(
@@ -92,14 +101,14 @@ def score_risk(
         )
 
     # ========================================================
-    # 🔥 STEP 2 — ANALYZE INPUTS
+    # STEP 2 — ANALYZE INPUTS
     # ========================================================
     phone_data = analyze_phone(payload.phone) if payload.phone else None
     email_data = analyze_email(payload.email) if payload.email else None
     ip_data = analyze_ip(payload.ip) if payload.ip else None
 
     # ========================================================
-    # 🔥 STEP 3 — COMPUTE RISK ENGINE
+    # STEP 3 — COMPUTE RISK ENGINE
     # ========================================================
     risk = compute_risk(
         phone_data=phone_data,
@@ -108,7 +117,7 @@ def score_risk(
     )
 
     # ========================================================
-    # 🔥 STEP 4 — LOG REQUEST (BILLING TRACKING CRITICAL)
+    # STEP 4 — LOG REQUEST
     # ========================================================
     log_request(
         db=db,
@@ -120,8 +129,7 @@ def score_risk(
     )
 
     # ========================================================
-    # 🔥 STEP 5 — METERED BILLING INCREMENT
-    # DAY 4 PHASE 2
+    # STEP 5 — METERED BILLING
     # ========================================================
     increment_usage(user.id)
 
@@ -129,23 +137,24 @@ def score_risk(
     usage_limit = get_plan_limit(user)
 
     # ========================================================
-    # 🔥 STEP 6 — RESPONSE (NOW BILLING-AWARE)
+    # STEP 6 — RESPONSE
     # ========================================================
     return {
         "input": payload.dict(),
 
-        # intelligence layers
         "phone_analysis": phone_data,
         "email_analysis": email_data,
         "ip_analysis": ip_data,
         "risk_analysis": risk,
 
-        # 🔥 DAY 4 PHASE 2 ADDITION
         "billing": {
             "plan_id": user.plan_id,
             "usage": current_usage,
             "usage_limit": usage_limit,
-            "remaining": max(0, usage_limit - current_usage)
+            "remaining": max(
+                0,
+                usage_limit - current_usage
+            )
         },
 
         "user": {

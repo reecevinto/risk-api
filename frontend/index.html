@@ -1,352 +1,283 @@
-<html>
-  <!DOCTYPE html>
-  <html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 
-    <head>
-      <meta charset="UTF-8">
-      <title>Risk Dashboard</title>
-      <script src="https://cdn.tailwindcss.com"></script>
-    </head>
+<head>
 
-    <body class="bg-gray-100 p-8">
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0">
 
-      <div class="max-w-4xl mx-auto">
+    <title>Africa Risk Intelligence API Dashboard</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+
+</head>
+
+<body class="bg-gray-100 p-8">
+
+    <div class="max-w-4xl mx-auto">
 
         <h1 class="text-3xl font-bold mb-6">
-          🚀 Risk API Dashboard
+            🚀 Africa Risk Intelligence API Dashboard
         </h1>
 
         <!-- STATUS -->
-        <div id="status" class="mb-4 text-sm text-gray-600">
-          Loading dashboard...
+        <div
+            id="status"
+            class="mb-4 text-sm text-gray-600">
+
+            Loading dashboard...
+
         </div>
 
         <!-- API KEY -->
         <div class="bg-white p-4 rounded shadow mb-6">
-          <h2 class="text-xl font-semibold mb-2">API Key</h2>
 
-          <p id="apiKey" class="text-green-600 font-mono break-all">
-            ...
-          </p>
+            <h2 class="text-xl font-semibold mb-2">
+                API Key
+            </h2>
+
+            <p
+                id="apiKey"
+                class="text-green-600 font-mono break-all">
+
+                ...
+
+            </p>
+
         </div>
 
         <!-- 🧠 BILLING STATE (NEW DAY 1 PHASE 2 ADDITION) -->
         <div class="bg-white p-4 rounded shadow mb-6">
 
-          <h2 class="text-xl font-semibold mb-2">
-            Billing Status
-          </h2>
+            <h2 class="text-xl font-semibold mb-2">
+                Billing Status
+            </h2>
 
-          <p>
-            Plan:
-            <span id="plan" class="font-semibold text-blue-600">
-              FREE
-            </span>
-          </p>
+            <p>
+                Plan:
+                <span
+                    id="plan"
+                    class="font-semibold text-blue-600">
 
-          <p>
-            Subscription:
-            <span id="subStatus" class="font-semibold text-green-600">
-              UNKNOWN
-            </span>
-          </p>
+                    FREE
 
-          <p>
-            Stripe Customer:
-            <span id="stripeStatus" class="font-semibold text-gray-600">
-              NOT LINKED
-            </span>
-          </p>
+                </span>
+            </p>
 
-          <p id="billingStatus" class="text-sm text-gray-500 mt-2"></p>
+            <p>
+                Subscription:
+                <span
+                    id="subStatus"
+                    class="font-semibold text-green-600">
+
+                    UNKNOWN
+
+                </span>
+            </p>
+
+            <p>
+                Stripe Customer:
+                <span
+                    id="stripeStatus"
+                    class="font-semibold text-gray-600">
+
+                    NOT LINKED
+
+                </span>
+            </p>
+
+      
 
         </div>
+
         <!-- 🧠 DAY 4 PHASE 2 — METERED BILLING -->
         <div class="bg-white p-4 rounded shadow mb-6">
-          <h2 class="text-xl font-semibold mb-2">Metered Billing</h2>
 
-          <p>
-            Current Usage:
-            <span id="currentUsage" class="font-semibold text-blue-600">0</span>
-          </p>
+            <h2 class="text-xl font-semibold mb-2">
+                Metered Billing
+            </h2>
 
-          <p>
-            Plan Limit:
-            <span id="usageLimit" class="font-semibold text-green-600">0</span>
-          </p>
+            <p>
+                Current Usage:
+                <span
+                    id="currentUsage"
+                    class="font-semibold text-blue-600">
 
-          <p>
-            Remaining:
-            <span id="remainingUsage"
-              class="font-semibold text-purple-600">0</span>
-          </p>
+                    0
 
-          <p>
-            Usage %:
-            <span id="usagePercent" class="font-semibold text-red-600">0%</span>
-          </p>
+                </span>
+            </p>
 
-          <div class="w-full bg-gray-200 rounded mt-3">
-            <div
-              id="usageBar"
-              class="bg-blue-600 text-xs leading-none py-1 text-center text-white rounded"
-              style="width: 0%">
-              0%
+            <p>
+                Plan Limit:
+                <span
+                    id="usageLimit"
+                    class="font-semibold text-green-600">
+
+                    0
+
+                </span>
+            </p>
+
+            <p>
+                Remaining:
+                <span
+                    id="remainingUsage"
+                    class="font-semibold text-purple-600">
+
+                    0
+
+                </span>
+            </p>
+
+            <p>
+                Usage %:
+                <span
+                    id="usagePercent"
+                    class="font-semibold text-red-600">
+
+                    0%
+
+                </span>
+            </p>
+
+            <div class="w-full bg-gray-200 rounded mt-3">
+
+                <div
+                    id="usageBar"
+                    class="bg-blue-600 text-xs leading-none py-1 text-center text-white rounded"
+                    style="width:0%;">
+
+                    0%
+
+                </div>
+
             </div>
-          </div>
+
         </div>
 
-        <!-- BILLING ACTIONS -->
+        <!-- 🧠 DAY 5 PHASE 2 — BILLING CYCLE -->
         <div class="bg-white p-4 rounded shadow mb-6">
 
-          <h2 class="text-xl font-semibold mb-2">
-            Upgrade
-          </h2>
+            <h2 class="text-xl font-semibold mb-2">
+                Billing Cycle
+            </h2>
 
-          <div class="flex gap-4">
+            <p>
+                Current Period Start:
 
-            <button
-              onclick="upgradeToPro()"
-              class="bg-black text-white px-4 py-2 rounded hover:bg-gray-800">
-              💳 Upgrade to Pro
-            </button>
+                <span
+                    id="billingStart"
+                    class="font-semibold text-green-600">
 
-            <button
-              onclick="upgradeToEnterprise()"
-              class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">
-              🏢 Upgrade to Enterprise
-            </button>
+                    --
 
-          </div>
+                </span>
+
+            </p>
+
+            <p>
+                Current Period End:
+
+                <span
+                    id="billingEnd"
+                    class="font-semibold text-blue-600">
+
+                    --
+
+                </span>
+
+            </p>
+
+            <p>
+                Next Usage Reset:
+
+                <span
+                    id="nextReset"
+                    class="font-semibold text-purple-600">
+
+                    --
+
+                </span>
+
+            </p>
+
+        </div>
+              <!-- BILLING ACTIONS -->
+      <div class="bg-white p-4 rounded shadow mb-6">
+
+        <h2 class="text-xl font-semibold mb-2">
+          Upgrade
+        </h2>
+
+        <div class="flex gap-4">
+
+          <button
+            onclick="upgradeToPro(this)"
+            class="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 transition">
+            💳 Upgrade to Pro
+          </button>
+
+          <button
+            onclick="upgradeToEnterprise(this)"
+            class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition">
+            🏢 Upgrade to Enterprise
+          </button>
 
         </div>
 
-        <!-- USAGE STATS -->
-        <div class="bg-white p-4 rounded shadow mb-6">
-
-          <h2 class="text-xl font-semibold mb-2">
-            Usage
-          </h2>
-
-          <p>
-            Total Requests:
-            <span id="total">0</span>
-          </p>
-
-          <p>
-            Average Risk Score:
-            <span id="avg">0</span>
-          </p>
-
-        </div>
-
-        <!-- RECENT REQUESTS -->
-        <div class="bg-white p-4 rounded shadow">
-
-          <h2 class="text-xl font-semibold mb-2">
-            Recent Requests
-          </h2>
-
-          <ul id="recent" class="space-y-2"></ul>
-
-        </div>
+        <p
+          id="billingStatus"
+          class="text-sm text-gray-500 mt-4">
+        </p>
 
       </div>
 
-      <script>
+      <!-- USAGE STATS -->
+      <div class="bg-white p-4 rounded shadow mb-6">
 
-        const API_KEY = "639479ab632caf8889314ec41841c653f662d17ac9e95324f99119100875e864";
+        <h2 class="text-xl font-semibold mb-2">
+          Usage
+        </h2>
 
-        async function loadDashboard() {
+        <p>
+          Total Requests:
+          <span id="total">0</span>
+        </p>
 
-            const statusEl = document.getElementById("status");
+        <p>
+          Average Risk Score:
+          <span id="avg">0.00</span>
+        </p>
 
-            try {
+      </div>
 
-                // ==============================
-                // USER INFO (UPDATED FOR PHASE 2)
-                // ==============================
+      <!-- RECENT REQUESTS -->
+      <div class="bg-white p-4 rounded shadow">
 
-                const userRes = await fetch(
-                    "http://localhost:8000/user/me",
-                    {
-                        headers: {
-                            "x-api-key": API_KEY
-                        }
-                    }
-                );
+        <h2 class="text-xl font-semibold mb-2">
+          Recent Requests
+        </h2>
 
-                const user = await userRes.json();
+        <ul
+          id="recent"
+          class="space-y-2">
+        </ul>
 
-                document.getElementById("apiKey").innerText =
-                    user.api_key || "No API key returned";
+      </div>
 
-                // 🧠 NEW: PLAN INFO (DAY 1 PHASE 2)
+    </div>
 
-                document.getElementById("plan").innerText =
-                    user.plan || "FREE";
+    <!-- Dashboard JavaScript -->
+    <script src="dashboard.js" defer></script>
 
-                document.getElementById("subStatus").innerText =
-                    user.subscription?.status || "NO SUBSCRIPTION";
+  </body>
 
-                document.getElementById("stripeStatus").innerText =
-                    user.stripe_customer_id ? "LINKED" : "NOT LINKED";
-                
-                    // ==============================
-    // 🧠 DAY 4 PHASE 2
-    // METERED BILLING
-    // ==============================
-
-    const currentUsage =
-      user.usage?.current ?? 0;
-
-    const usageLimit =
-      user.usage?.limit ?? 0;
-
-    const remainingUsage =
-      user.usage?.remaining ?? 0;
-
-    const usagePercent =
-      user.usage?.percent_used ?? 0;
-
-    document.getElementById("currentUsage").innerText =
-      currentUsage;
-
-    document.getElementById("usageLimit").innerText =
-      usageLimit;
-
-    document.getElementById("remainingUsage").innerText =
-      remainingUsage;
-
-    document.getElementById("usagePercent").innerText =
-      `${usagePercent}%`;
-
-    const usageBar =
-      document.getElementById("usageBar");
-
-    usageBar.style.width =
-      `${usagePercent}%`;
-
-    usageBar.innerText =
-      `${usagePercent}%`;
-
-                // ==============================
-                // USAGE
-                // ==============================
-
-                const usageRes = await fetch(
-                    "http://localhost:8000/admin/usage",
-                    {
-                        headers: {
-                            "x-api-key": API_KEY
-                        }
-                    }
-                );
-
-                const usage = await usageRes.json();
-
-                document.getElementById("total").innerText =
-                    usage.total_requests ?? 0;
-
-                document.getElementById("avg").innerText =
-                    usage.average_risk_score?.toFixed(2) ?? "0.00";
-
-                // ==============================
-                // RECENT REQUESTS
-                // ==============================
-
-                const list = document.getElementById("recent");
-
-                list.innerHTML = "";
-
-                if (!usage.recent_requests?.length) {
-
-                    list.innerHTML =
-                        "<li class='text-gray-500'>No requests yet</li>";
-
-                } else {
-
-                    usage.recent_requests.forEach(r => {
-
-                        const item = document.createElement("li");
-
-                        item.className =
-                            "border p-2 rounded bg-gray-50";
-
-                        item.innerText = `${r.email || "N/A"} | ${r.ip || "N/A"} | Score: ${r.risk_score}`;
-
-                        list.appendChild(item);
-
-                    });
-
-                }
-
-                statusEl.innerText = "✅ Dashboard loaded successfully";
-
-            } catch (error) {
-
-                console.error(error);
-
-                statusEl.innerText = "❌ Error loading dashboard";
-
-            }
-
-        }
-
-        loadDashboard();
-
-        // ==============================
-        // BILLING ACTIONS
-        // ==============================
-
-        async function upgradeToPro() {
-
-            const statusEl = document.getElementById("billingStatus");
-
-            statusEl.innerText = "Creating Pro checkout...";
-
-            const res = await fetch(
-                "http://localhost:8000/billing/checkout/pro",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "x-api-key": API_KEY
-                    }
-                }
-            );
-
-            const data = await res.json();
-
-            window.location.href = data.checkout_url;
-
-        }
-
-        async function upgradeToEnterprise() {
-
-            const statusEl = document.getElementById("billingStatus");
-
-            statusEl.innerText = "Creating Enterprise checkout...";
-
-            const res = await fetch(
-                "http://localhost:8000/billing/checkout/enterprise",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "x-api-key": API_KEY
-                    }
-                }
-            );
-
-            const data = await res.json();
-
-            window.location.href = data.checkout_url;
-
-        }
-
-    </script>
-
-    </body>
-
-  </html>
+</html>
+  

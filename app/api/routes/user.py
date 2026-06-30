@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.api.routes.auth import get_current_user
 
+from app.models import subscription
 from app.models.api_key import APIKey
 from app.models.subscription import Subscription
 from app.models.plan import Plan
@@ -14,6 +15,11 @@ from app.models.plan import Plan
 from app.services.metering_service import (
     get_usage,
     get_plan_limit
+)
+# Day 5 Phase 2 — Billing Cycle Reset
+from app.services.billing_cycle_service import (
+    get_current_billing_period,
+    get_next_reset_date
 )
 
 router = APIRouter()
@@ -72,6 +78,14 @@ def get_me(
 
     current_usage = get_usage(user.id)
     usage_limit = get_plan_limit(user)
+
+    # ============================
+    # DAY 5 PHASE 2
+    # BILLING CYCLE
+    # ============================
+
+    billing_period = get_current_billing_period(subscription)
+    next_reset = get_next_reset_date(subscription)
 
     # ============================
     # RESPONSE (ENHANCED)
@@ -134,14 +148,24 @@ def get_me(
             "remaining": max(
                 0,
                 usage_limit - current_usage
-            ),
+        ),
             "percent_used": (
                 round(
                     (current_usage / usage_limit) * 100,
                     2
-                )
-                if usage_limit > 0
+               )
+               if usage_limit > 0
                 else 0
-            )
-        }
+    )
+},
+
+# ============================
+# DAY 5 PHASE 2
+# BILLING CYCLE
+# ============================
+
+"billing_cycle": {
+    "current_period": billing_period,
+    "next_reset": next_reset
+}
     }

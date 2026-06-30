@@ -1,0 +1,48 @@
+/* =====================================================
+   RISK API DASHBOARD
+   styles.css
+===================================================== */
+
+/* Smooth scrolling */
+
+html {
+    scroll-behavior: smooth;
+}
+
+/* Better body font rendering */
+
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Progress bar animation */
+
+#usageBar {
+    transition: width 0.4s ease-in-out;
+}
+
+/* Loading cursor for disabled buttons */
+
+button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Slight hover lift for dashboard cards */
+
+.bg-white {
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.bg-white:hover {
+    transform: translateY(-2px);
+}
+
+/* Monospace API key wrapping */
+
+#apiKey {
+    word-break: break-word;
+}

@@ -1,5 +1,4 @@
-import os
-import redis
+
 
 from datetime import datetime
 from calendar import monthrange
@@ -15,14 +14,17 @@ from app.core.subscription_states import (
 )
 
 # ============================================================
+# DAY 5 PHASE 2
+# BILLING CYCLE ENGINE
+# ============================================================
+from app.services.billing_cycle_service import (
+    check_billing_cycle
+)
+
+# ============================================================
 # REDIS
 # ============================================================
-
-redis_client = redis.Redis(
-    host=os.getenv("REDIS_HOST", "redis"),
-    port=int(os.getenv("REDIS_PORT", 6379)),
-    decode_responses=True
-)
+from app.core.redis import redis_client
 
 # ============================================================
 # PLAN LIMITS
@@ -171,7 +173,17 @@ def can_make_request(
         .first()
     )
 
+    # ========================================================
+    # DAY 5 PHASE 2
+    # Automatically reset usage if billing cycle expired
+    # ========================================================
     if latest_sub:
+
+        check_billing_cycle(
+            db=db,
+            subscription=latest_sub,
+            user_id=user.id
+        )
 
         if latest_sub.status not in [
             ACTIVE,
