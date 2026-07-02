@@ -1,7 +1,9 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Float
+
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.base import Base
+
 
 
 class User(Base):
@@ -24,6 +26,16 @@ class User(Base):
         unique=True,
         nullable=True
     )
+      # ============================================================
+    # DAY 6 PHASE 2
+    # Whether this customer has overage billing enabled
+    # ============================================================
+
+    overage_enabled = Column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
 
     # Relationships
     api_keys = relationship(
@@ -41,3 +53,4 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan"
     )
+

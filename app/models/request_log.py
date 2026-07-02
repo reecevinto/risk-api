@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Boolean
 from sqlalchemy.sql import func
 from app.db.base import Base
 
@@ -25,3 +25,10 @@ class RequestLog(Base):
 
     # 🔥 Timestamp
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Day 6 Phase 2: Overage tracking
+    is_overage = Column(
+    Boolean,
+    default=False,
+    nullable=False
+    )

@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.api.routes.auth import get_current_user
 
-from app.models import subscription
+# from app.models import subscription 
+
 from app.models.api_key import APIKey
 from app.models.subscription import Subscription
 from app.models.plan import Plan
@@ -12,10 +13,17 @@ from app.models.plan import Plan
 # ============================================================
 # DAY 4 PHASE 2 — METERED BILLING ENGINE
 # ============================================================
-from app.services.metering_service import (
-    get_usage,
-    get_plan_limit
+from app.services.metering_service import usage_summary
+
+# ============================================================
+# DAY 6 PHASE 2 — OVERAGE ENGINE
+# ============================================================
+
+from app.services.overage_service import (
+    calculate_overage_charge
 )
+
+
 # Day 5 Phase 2 — Billing Cycle Reset
 from app.services.billing_cycle_service import (
     get_current_billing_period,
@@ -76,8 +84,8 @@ def get_me(
     # METERED BILLING ENGINE
     # ============================
 
-    current_usage = get_usage(user.id)
-    usage_limit = get_plan_limit(user)
+    # current_usage = get_usage(user.id)
+    # usage_limit = get_plan_limit(user)
 
     # ============================
     # DAY 5 PHASE 2
@@ -86,6 +94,15 @@ def get_me(
 
     billing_period = get_current_billing_period(subscription)
     next_reset = get_next_reset_date(subscription)
+
+    # ============================
+    # DAY 6 PHASE 2
+    # OVERAGE BILLING
+    # ============================
+
+    usage = usage_summary(user)
+
+    overage = calculate_overage_charge(user)
 
     # ============================
     # RESPONSE (ENHANCED)
@@ -137,26 +154,21 @@ def get_me(
             ]
         },
 
-        # ============================
-        # 🧠 DAY 4 PHASE 2 ADDITION
-        # METERED BILLING DATA
-        # ============================
+       # ============================
+# DAY 4 PHASE 2
+# METERED BILLING
+# ============================
 
-        "usage": {
-            "current": current_usage,
-            "limit": usage_limit,
-            "remaining": max(
-                0,
-                usage_limit - current_usage
-        ),
-            "percent_used": (
-                round(
-                    (current_usage / usage_limit) * 100,
-                    2
-               )
-               if usage_limit > 0
-                else 0
-    )
+"usage": {
+
+    "current": usage["usage"],
+
+    "limit": usage["limit"],
+
+    "remaining": usage["remaining"],
+
+    "percent_used": usage["percent"]
+
 },
 
 # ============================
@@ -167,5 +179,26 @@ def get_me(
 "billing_cycle": {
     "current_period": billing_period,
     "next_reset": next_reset
+},
+
+# ============================
+# DAY 6 PHASE 2
+# OVERAGE SETTINGS
+# ============================
+
+"overage_enabled": user.overage_enabled,
+
+    "plan_allow_overage": (
+        plan.allow_overage
+        if plan
+        else False
+    ),
+
+    "billing": {
+
+        "overage_requests": overage["overage_requests"],
+        "price_per_request": overage["price_per_request"],
+        "total_charge": overage["total_charge"],
+        "is_overage": overage["overage_requests"] > 0
 }
     }

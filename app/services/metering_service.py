@@ -1,5 +1,3 @@
-
-
 from datetime import datetime
 from calendar import monthrange
 
@@ -25,16 +23,6 @@ from app.services.billing_cycle_service import (
 # REDIS
 # ============================================================
 from app.core.redis import redis_client
-
-# ============================================================
-# PLAN LIMITS
-# ============================================================
-
-PLAN_LIMITS = {
-    1: 1000,          # FREE
-    2: 100000,        # PRO
-    3: 1000000        # ENTERPRISE
-}
 
 # ============================================================
 # BILLING CYCLE KEY
@@ -108,11 +96,16 @@ def increment_usage(user_id: int):
 # ============================================================
 
 def get_plan_limit(user: User):
+    """
+    Returns the user's monthly request allowance.
 
-    return PLAN_LIMITS.get(
-        user.plan_id,
-        PLAN_LIMITS[1]
-    )
+    Uses the Plan table instead of hardcoded limits.
+    """
+
+    if user.plan:
+        return user.plan.request_limit
+
+    return 1000
 
 
 # ============================================================
@@ -126,6 +119,72 @@ def within_limit(user: User):
     limit = get_plan_limit(user)
 
     return usage < limit
+
+
+# ============================================================
+# DAY 6 PHASE 2
+# OVERAGE HELPERS
+# ============================================================
+
+def is_overage(user: User):
+    """
+    Returns True once the included plan limit
+    has been reached or exceeded.
+    """
+
+    usage = get_usage(user.id)
+
+    limit = get_plan_limit(user)
+
+    return usage >= limit
+
+
+def overage_requests(user: User):
+    """
+    Returns the number of billable overage requests.
+
+    Example:
+
+        Limit = 1000
+        Usage = 1235
+
+        Returns:
+            235
+    """
+
+    usage = get_usage(user.id)
+
+    limit = get_plan_limit(user)
+
+    return max(usage - limit, 0)
+
+
+def usage_summary(user: User):
+    """
+    Returns a complete usage summary for dashboards,
+    billing and reporting.
+    """
+
+    usage = get_usage(user.id)
+
+    limit = get_plan_limit(user)
+
+    remaining = max(limit - usage, 0)
+
+    percent = 0
+
+    if limit > 0:
+        percent = round((usage / limit) * 100, 2)
+
+    overage = max(usage - limit, 0)
+
+    return {
+        "usage": usage,
+        "limit": limit,
+        "remaining": remaining,
+        "percent": percent,
+        "overage": overage
+    }
 
 
 # ============================================================
@@ -191,4 +250,29 @@ def can_make_request(
         ]:
             return False
 
-    return within_limit(user)
+    # ========================================================
+    # DAY 6 PHASE 2
+    # Overage charging engine
+    #
+    # If usage is within the included allowance,
+    # always allow the request.
+    #
+    # Once the allowance has been exhausted:
+    #
+    # • If the plan allows overage AND the user has
+    #   enabled overage billing, continue processing.
+    #
+    # • Otherwise block the request.
+    # ========================================================
+
+    if within_limit(user):
+        return True
+
+    if (
+        user.plan
+        and user.plan.allow_overage
+        and user.overage_enabled
+    ):
+        return True
+
+    return False

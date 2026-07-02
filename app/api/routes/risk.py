@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.api.routes.auth import get_current_user
 
-from app.models import user
+# from app.models import user
 from app.schemas.risky import RiskRequest
 
 from app.services.phone_service import analyze_phone
@@ -17,17 +17,22 @@ from app.services.rate_limiter import check_rate_limit
 # ============================================================
 # DAY 4 PHASE 2 — METERED BILLING ENGINE
 # ============================================================
+
 from app.services.metering_service import (
     can_make_request,
     increment_usage,
     get_usage,
-    get_plan_limit
+    get_plan_limit,
+    is_overage
 )
 
 # ============================================================
-# DAY 5 PHASE 2 — BILLING CYCLE RESET
+# DAY 6 PHASE 2 — OVERAGE ENGINE
 # ============================================================
 
+from app.services.overage_service import (
+    calculate_overage_charge
+)
 
 router = APIRouter()
 
@@ -35,6 +40,7 @@ router = APIRouter()
 # ============================================================
 # 🔹 EXISTING TEST ENDPOINT (KEEP THIS)
 # ============================================================
+
 @router.get("/analyze")
 def analyze_risk(
     phone: str = None,
@@ -70,6 +76,7 @@ def analyze_risk(
 # ============================================================
 # 🔥 MAIN PRODUCTION ENDPOINT
 # ============================================================
+
 @router.post("/score")
 def score_risk(
     payload: RiskRequest,
@@ -79,12 +86,9 @@ def score_risk(
 
     # ========================================================
     # DAY 5 PHASE 2
-    # ENSURE BILLING CYCLE IS CURRENT
+    # BILLING / SUBSCRIPTION VALIDATION
     # ========================================================
-  
-    # ========================================================
-    # STEP 0 — BILLING STATE CHECK
-    # ========================================================
+
     if not can_make_request(db, user):
         raise HTTPException(
             status_code=403,
@@ -92,8 +96,9 @@ def score_risk(
         )
 
     # ========================================================
-    # STEP 1 — RATE LIMIT CHECK
+    # STEP 1 — RATE LIMIT
     # ========================================================
+
     if not check_rate_limit(user.id):
         raise HTTPException(
             status_code=429,
@@ -103,13 +108,26 @@ def score_risk(
     # ========================================================
     # STEP 2 — ANALYZE INPUTS
     # ========================================================
-    phone_data = analyze_phone(payload.phone) if payload.phone else None
-    email_data = analyze_email(payload.email) if payload.email else None
-    ip_data = analyze_ip(payload.ip) if payload.ip else None
+
+    phone_data = (
+        analyze_phone(payload.phone)
+        if payload.phone else None
+    )
+
+    email_data = (
+        analyze_email(payload.email)
+        if payload.email else None
+    )
+
+    ip_data = (
+        analyze_ip(payload.ip)
+        if payload.ip else None
+    )
 
     # ========================================================
-    # STEP 3 — COMPUTE RISK ENGINE
+    # STEP 3 — COMPUTE RISK
     # ========================================================
+
     risk = compute_risk(
         phone_data=phone_data,
         email_data=email_data,
@@ -117,29 +135,50 @@ def score_risk(
     )
 
     # ========================================================
+    # DAY 6
+    # Detect whether THIS request is an overage request
+    # BEFORE incrementing usage.
+    # ========================================================
+
+    overage = calculate_overage_charge(user)
+    overage_request = overage["is_overage"]
+
+    # ========================================================
     # STEP 4 — LOG REQUEST
     # ========================================================
+
     log_request(
         db=db,
         user_id=user.id,
         email=payload.email,
         phone=payload.phone,
         ip=payload.ip,
-        risk=risk
+        risk=risk,
+        is_overage=overage_request
     )
 
     # ========================================================
     # STEP 5 — METERED BILLING
     # ========================================================
+
     increment_usage(user.id)
 
     current_usage = get_usage(user.id)
     usage_limit = get_plan_limit(user)
 
     # ========================================================
+    # DAY 6
+    # Calculate overage cost
+    # ========================================================
+
+    # overage = calculate_overage_charge(user)
+
+    # ========================================================
     # STEP 6 — RESPONSE
     # ========================================================
+
     return {
+
         "input": payload.dict(),
 
         "phone_analysis": phone_data,
@@ -148,13 +187,29 @@ def score_risk(
         "risk_analysis": risk,
 
         "billing": {
+
             "plan_id": user.plan_id,
+
             "usage": current_usage,
+
             "usage_limit": usage_limit,
+
             "remaining": max(
                 0,
                 usage_limit - current_usage
-            )
+            ),
+
+            # -----------------------------
+            # DAY 6
+            # -----------------------------
+            "is_overage_request": overage_request,
+
+            "overage_requests": overage["overage_requests"],
+
+            "overage_price_per_request": overage["price_per_request"],
+
+            "current_overage_charge": overage["total_charge"]
+
         },
 
         "user": {

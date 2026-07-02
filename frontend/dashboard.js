@@ -337,6 +337,39 @@ async function loadDashboard() {
             nextReset
         );
 
+
+        // ==============================
+// DAY 6 PHASE 2
+// OVERAGE BILLING
+// ==============================
+
+const billing = user.billing || {};
+
+setText(
+    "overageEnabled",
+    user.overage_enabled ? "YES" : "NO"
+);
+
+setText(
+    "planAllowsOverage",
+    user.plan_allow_overage ? "YES" : "NO"
+);
+
+setText(
+    "overageRequests",
+    billing.overage_requests ?? 0
+);
+
+setText(
+    "overagePrice",
+    `$${billing.price_per_request ?? 0}`
+);
+
+setText(
+    "overageCharge",
+    `$${billing.total_charge ?? 0}`
+);
+
         // ==============================
         // USAGE
         // ==============================
