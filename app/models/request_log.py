@@ -16,6 +16,9 @@ class RequestLog(Base):
     phone = Column(String, nullable=True)
     ip = Column(String, nullable=True)
 
+    # 🔥 Endpoint called
+    endpoint = Column( String, nullable=False)
+
     # 🔥 Risk results
     risk_score = Column(Integer, nullable=False)
     trust_level = Column(String, nullable=False)

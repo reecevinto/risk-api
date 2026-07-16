@@ -10,7 +10,10 @@ def log_request(
     phone: str,
     ip: str,
     risk: dict,
-    is_overage: bool = False
+    endpoint: str = "/risk/score",
+    is_overage: bool = False,
+    
+
 ):
     """
     Persist a completed API request.
@@ -35,6 +38,8 @@ def log_request(
         phone=phone,
 
         ip=ip,
+
+        endpoint=endpoint,
 
         risk_score=risk.get("risk_score"),
 
