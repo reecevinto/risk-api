@@ -1,8 +1,9 @@
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Optional, Dict
+from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
 
 from app.models.subscription import Subscription
-from app.core.redis import redis_client
 
 # ============================================================
 # DAY 5 PHASE 2
@@ -25,23 +26,6 @@ def needs_reset(subscription: Subscription) -> bool:
 
 
 # ============================================================
-# RESET REDIS USAGE
-# ============================================================
-
-def reset_usage(user_id: int):
-    """
-    Clears the Redis usage counter for the user's
-    current billing cycle.
-    """
-
-    cycle = datetime.utcnow().strftime("%Y-%m")
-
-    key = f"usage:{user_id}:{cycle}"
-
-    redis_client.set(key, 0)
-
-
-# ============================================================
 # ADVANCE BILLING PERIOD
 # ============================================================
 
@@ -50,19 +34,24 @@ def advance_billing_period(
     subscription: Subscription
 ):
     """
-    Advances the billing period by one month.
+    Advances the billing period by one calendar month using relativedelta.
 
     NOTE:
-    During development we advance locally.
-    Once Stripe Billing is fully enabled,
-    Stripe webhooks will become the source of truth.
+    During local development or non-Stripe flows, we advance period bounds in 
+    PostgreSQL. Because metering dynamically queries request_logs between 
+    current_period_start and current_period_end, updating these timestamps 
+    automatically resets active billing cycle usage.
+    
+    Once Stripe Billing is fully active, Stripe webhooks become the external 
+    source of truth for updating these subscription boundaries.
     """
 
     now = datetime.utcnow()
 
     subscription.current_period_start = now
-    subscription.current_period_end = now + timedelta(days=30)
+    subscription.current_period_end = now + relativedelta(months=1)
 
+    # db.flush()
     db.commit()
     db.refresh(subscription)
 
@@ -73,33 +62,30 @@ def advance_billing_period(
 
 def check_billing_cycle(
     db: Session,
-    subscription: Subscription,
-    user_id: int
+    subscription: Subscription
 ):
     """
-    Automatically resets usage when the billing
-    period has expired.
+    Automatically advances the subscription billing window.
+
+    Because metering queries request_logs using the active billing period boundaries, 
+    advancing the billing window automatically begins a new usage cycle without 
+    resetting or deleting any historical data.
     """
 
     if not subscription:
         return
 
-    if needs_reset(subscription):
+    if subscription and needs_reset(subscription):
+        advance_billing_period(db, subscription)
 
-        reset_usage(user_id)
-
-        advance_billing_period(
-            db,
-            subscription
-        )
 
 # ============================================================
 # BILLING PERIOD HELPERS
 # ============================================================
 
-def get_current_billing_period(subscription: Subscription):
+def get_current_billing_period(subscription: Subscription) -> Optional[Dict[str, Optional[datetime]]]:
     """
-    Returns the current billing period.
+    Returns the current billing period dictionary containing start and end timestamps.
     """
 
     if not subscription:
@@ -111,9 +97,9 @@ def get_current_billing_period(subscription: Subscription):
     }
 
 
-def get_next_reset_date(subscription: Subscription):
+def get_next_reset_date(subscription: Subscription) -> Optional[datetime]:
     """
-    Returns when usage will reset.
+    Returns the exact timestamp when usage will next reset.
     """
 
     if not subscription:

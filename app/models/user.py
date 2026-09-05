@@ -1,56 +1,157 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Float
+"""
+============================================================
+USER MODEL
+============================================================
+
+Core application user model.
+
+Responsibilities
+----------------
+✓ Store authenticated user identity
+✓ Store billing-plan association
+✓ Store Stripe customer association
+✓ Store overage-billing configuration
+✓ Maintain API-key relationship
+✓ Maintain subscription relationship
+
+IMPORTANT
+---------
+This model is intentionally kept schema-compatible with the
+current Alembic migration history.
+
+Current migration HEAD:
+
+    903267aa7fb0
+    Add subscription current period start
+
+No new database columns or constraints are introduced here.
+============================================================
+"""
+
+from datetime import datetime
+
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    DateTime,
+    ForeignKey,
+    Boolean,
+)
 
 from sqlalchemy.orm import relationship
-from datetime import datetime
+
 from app.db.base import Base
 
 
-
 class User(Base):
+    """
+    Application user.
+
+    A User may have:
+
+        • API keys
+        • A billing plan
+        • One or more subscriptions
+        • Stripe customer mapping
+        • Overage billing configuration
+
+    DeviceFingerprint and RequestLog records reference this
+    user's primary key through user_id.
+    """
+
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
+    # ========================================================
+    # PRIMARY KEY
+    # ========================================================
 
-    email = Column(String, unique=True, index=True, nullable=False)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
-    name = Column(String, nullable=True)
+    # ========================================================
+    # USER IDENTITY
+    # ========================================================
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    email = Column(
+        String,
+        unique=True,
+        index=True,
+        nullable=False,
+    )
 
-    # Current billing plan
-    plan_id = Column(Integer, ForeignKey("plans.id"))
+    name = Column(
+        String,
+        nullable=True,
+    )
 
-    # Stripe customer mapping
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    # ========================================================
+    # BILLING PLAN
+    # ========================================================
+
+    # Current billing plan associated with this user.
+
+    plan_id = Column(
+        Integer,
+        ForeignKey("plans.id"),
+    )
+
+    # ========================================================
+    # STRIPE CUSTOMER
+    # ========================================================
+
+    # Maps this application user to the corresponding
+    # Stripe customer.
+
     stripe_customer_id = Column(
         String,
         unique=True,
-        nullable=True
+        nullable=True,
     )
-      # ============================================================
+
+    # ========================================================
     # DAY 6 PHASE 2
-    # Whether this customer has overage billing enabled
-    # ============================================================
+    # OVERAGE BILLING
+    # ========================================================
+
+    # Whether this customer has overage billing enabled.
 
     overage_enabled = Column(
         Boolean,
         default=False,
-        nullable=False
+        nullable=False,
     )
 
-    # Relationships
+    # ========================================================
+    # RELATIONSHIPS
+    # ========================================================
+
+    # API keys belonging to this user.
+
     api_keys = relationship(
         "APIKey",
         back_populates="user",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
 
+    # Current billing plan.
+
     plan = relationship(
-        "Plan"
+        "Plan",
     )
+
+    # Subscriptions belonging to this user.
 
     subscriptions = relationship(
         "Subscription",
         back_populates="user",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
-

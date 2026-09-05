@@ -10,7 +10,8 @@ from app.api.routes import (
     user,
     admin,
     billing,
-    webhooks
+    webhooks,
+    analytics
 )
 
 app = FastAPI(title="Africa Risk Intelligence API")
@@ -110,6 +111,14 @@ app.include_router(
     tags=["Webhooks"]
 )
 
+#============================================================
+# 📈 ANALYTICS ROUTES Day 8 phase 3
+# ============================================================
+app.include_router(
+    analytics.router,
+    prefix="/analytics",
+    tags=["Analytics"]
+)
 
 # ============================================================
 # ❤️ HEALTH CHECK

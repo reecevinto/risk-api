@@ -19,7 +19,8 @@ class Subscription(Base):
     user_id = Column(
         Integer,
         ForeignKey("users.id"),
-        nullable=False
+        nullable=False,
+        index=True
     )
 
     stripe_subscription_id = Column(
@@ -43,6 +44,11 @@ class Subscription(Base):
         DateTime,
         nullable=True
     )
+
+    current_period_start = Column(
+    DateTime,
+    nullable=True
+)
 
     user = relationship(
         "User",

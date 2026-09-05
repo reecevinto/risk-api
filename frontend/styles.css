@@ -1,10 +1,7 @@
 /* =====================================================
    Africa Risk Intelligence — Dashboard Custom Styles
    All non-Tailwind, hand-written CSS lives here.
-   Tailwind utility classes remain in index.html markup —
-   that's Tailwind's intended usage model (utility-first
-   classes scanned live from the DOM by the CDN build),
-   so they aren't duplicated here.
+   Strictly separated from HTML layout components.
    ===================================================== */
 
 body {
@@ -15,9 +12,20 @@ body {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* Base structural progress bar rules (Replaces inline styles) */
+/* Base structural progress bar rules */
 #usageBarMini, #usageBar {
     width: 0%;
+}
+
+/* Device Intelligence progress bars */
+#healthTrustedBar,
+#healthNewBar,
+#healthBlockedBar {
+    width: 0%;
+}
+
+#reputationGaugeBar {
+    width: 100%;
 }
 
 /* Scrollbars */
