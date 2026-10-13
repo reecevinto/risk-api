@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -12,6 +14,14 @@ from app.services.ip_service import analyze_ip
 from app.services.risk_engine import compute_risk
 from app.services.log_service import log_request
 from app.services.rate_limiter import check_rate_limit
+
+# DAY 9 PHASE 3
+from app.services.behavioral_risk_service import (
+    analyze_behavior,
+    analyze_session_behavior,
+    get_recent_request_context,
+    get_recent_request_timestamps,
+)
 
 # ============================================================
 # DAY 8 — PHASE 3
@@ -309,6 +319,61 @@ def score_risk(
     )
 
     # ========================================================
+    # DAY 9 — PHASE 3
+    # BEHAVIORAL RISK ENGINE V1
+    # ========================================================
+    #
+    # RequestLog provides the completed request history.
+    # The current request has not been logged yet.
+    #
+    # Behavioral analysis therefore uses:
+    #
+    #   1. Previous request timestamps
+    #   2. Current request timestamp
+    #   3. Previous request session context
+    #   4. Current device identity
+    #   5. Current request IP
+    #
+    # This does NOT create another RequestLog.
+    # ========================================================
+
+    recent_timestamps = get_recent_request_timestamps(
+        db=db,
+        user_id=user.id,
+    )
+
+    recent_request_context = get_recent_request_context(
+        db=db,
+        user_id=user.id,
+    )
+
+    current_request_time = datetime.now(timezone.utc)
+
+    behavior_timestamps = recent_timestamps + [
+        current_request_time,
+    ]
+
+    behavior = analyze_behavior(
+        behavior_timestamps,
+    )
+
+    session_behavior = analyze_session_behavior(
+        previous_requests=recent_request_context,
+        current_device_id=device.id,
+        current_ip=payload.ip,
+        current_time=current_request_time,
+    )
+
+    behavior_risk_score = (
+        behavior["behavior_risk_score"]
+        + session_behavior["session_risk_score"]
+    )
+
+    behavior_flags = (
+        behavior["behavior_flags"]
+        + session_behavior["session_flags"]
+    )
+    # ========================================================
     # DAY 6
     # DETERMINE WHETHER THIS REQUEST IS AN OVERAGE REQUEST
     # BEFORE LOGGING
@@ -377,6 +442,14 @@ def score_risk(
         "ip_analysis": ip_data,
 
         "risk_analysis": risk,
+
+        # ====================================================
+        # BEHAVIORAL RISK INTELLIGENCE
+        # ====================================================
+
+        "behavior_risk_score": behavior_risk_score,
+
+        "behavior_flags": behavior_flags,
 
         # ====================================================
         # DEVICE INTELLIGENCE

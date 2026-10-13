@@ -11,3 +11,4 @@ email-validator
 redis
 stripe
 python-dateutil
+pytest
