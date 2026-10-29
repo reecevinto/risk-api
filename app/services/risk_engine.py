@@ -22,7 +22,17 @@ def compute_risk(phone_data=None, email_data=None, ip_data=None):
             score += 25
             flags.append("disposable_email")
 
-        if not email_data.get("mx_records"):
+        # Penalize confirmed missing MX records, not DNS lookup failures.
+        # Preserve original behavior for legacy results without mx_status.
+        mx_status = email_data.get("mx_status")
+
+        if mx_status == "missing":
+            score += 20
+            flags.append("no_mx_records")
+        elif (
+            "mx_status" not in email_data
+            and not email_data.get("mx_records")
+        ):
             score += 20
             flags.append("no_mx_records")
 
@@ -66,7 +76,7 @@ def compute_risk(phone_data=None, email_data=None, ip_data=None):
             flags.append("country_mismatch")
 
     # -------------------------
-    # NORMALIZE SCORE (0–100)
+    # NORMALIZE SCORE (0-100)
     # -------------------------
     score = min(score, 100)
 

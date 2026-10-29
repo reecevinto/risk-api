@@ -1,60 +1,106 @@
-import re
 import dns.resolver
+from email_validator import EmailNotValidError, validate_email
 
+# Curated starter list. This is not intended to be an exhaustive feed.
 DISPOSABLE_DOMAINS = {
-    "mailinator.com",
     "10minutemail.com",
+    "10minemail.com",
+    "dispostable.com",
+    "emailondeck.com",
+    "fakeinbox.com",
+    "getnada.com",
+    "guerrillamail.com",
+    "maildrop.cc",
+    "mailinator.com",
+    "mailnesia.com",
+    "mintemail.com",
+    "mohmal.com",
+    "sharklasers.com",
     "tempmail.com",
-    "guerrillamail.com"
+    "temp-mail.org",
+    "throwawaymail.com",
+    "trashmail.com",
+    "yopmail.com",
 }
 
+DNS_LOOKUP_TIMEOUT_SECONDS = 2.0
 
-def analyze_email(email: str):
+
+def _is_disposable_domain(domain: str) -> bool:
+    """Match known disposable domains and their subdomains."""
+    return any(
+        domain == disposable_domain
+        or domain.endswith(f".{disposable_domain}")
+        for disposable_domain in DISPOSABLE_DOMAINS
+    )
+
+
+def _check_mx_records(domain: str) -> tuple[bool, str]:
+    """
+    Return MX presence and status.
+
+    NXDOMAIN and an authoritative no-answer are treated as missing.
+    Transient resolver failures are treated as unavailable.
+    """
+    try:
+        answers = dns.resolver.resolve(
+            domain,
+            "MX",
+            lifetime=DNS_LOOKUP_TIMEOUT_SECONDS,
+        )
+        if answers:
+            return True, "present"
+        return False, "missing"
+
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+        return False, "missing"
+
+    except Exception:
+        # Do not expose resolver details or mistake an outage for
+        # confirmed evidence that the domain has no mail exchanger.
+        return False, "unavailable"
+
+
+def analyze_email(email: str) -> dict:
     result = {
         "valid_format": False,
         "domain": "",
         "mx_records": False,
+        "mx_status": "not_checked",
         "disposable": False,
-        "risk_flag": "low"
+        "risk_flag": "high",
     }
 
-    # 1. Validate format
-    email_regex = r"^[\w\.-]+@[\w\.-]+\.\w+$"
-    if not re.match(email_regex, email):
-        result["risk_flag"] = "high"
+    if not isinstance(email, str) or not email.strip():
+        return result
+
+    try:
+        validated = validate_email(
+            email.strip(),
+            check_deliverability=False,
+            allow_smtputf8=False,
+        )
+    except EmailNotValidError:
         return result
 
     result["valid_format"] = True
-
-    # 2. Extract domain (normalize)
-    domain = email.split("@")[1].lower()
+    domain = validated.ascii_domain.lower()
     result["domain"] = domain
 
-    # 3. Check disposable
-    if domain in DISPOSABLE_DOMAINS:
-        result["disposable"] = True
+    disposable = _is_disposable_domain(domain)
+    result["disposable"] = disposable
 
-    # 4. Check MX records
-    try:
-        answers = dns.resolver.resolve(domain, "MX")
-        if answers:
-            result["mx_records"] = True
+    mx_records, mx_status = _check_mx_records(domain)
+    result["mx_records"] = mx_records
+    result["mx_status"] = mx_status
 
-    except dns.resolver.NoAnswer:
-        result["mx_records"] = False
-
-    except dns.resolver.NXDOMAIN:
-        result["mx_records"] = False
-
-    except Exception:
-        result["mx_records"] = False
-
-    # 5. Risk scoring
-    if result["disposable"]:
+    if disposable:
         result["risk_flag"] = "high"
-    elif not result["mx_records"]:
+    elif mx_status == "missing":
         result["risk_flag"] = "medium"
     else:
+        # An unavailable lookup is unknown evidence, not a confirmed
+        # domain failure. Risk scoring will use mx_status explicitly.
         result["risk_flag"] = "low"
 
     return result

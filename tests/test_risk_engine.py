@@ -252,3 +252,77 @@ def test_unexpected_ip_status_does_not_increase_risk(status):
     assert result["risk_score"] == 0
     assert result["trust_level"] == "low"
     assert result["flags"] == []
+
+
+@pytest.mark.parametrize(
+    "mx_status",
+    ["unavailable", "not_checked", "present"],
+)
+def test_new_email_results_only_penalize_confirmed_missing_mx(mx_status):
+    result = compute_risk(
+        email_data={
+            "valid_format": True,
+            "disposable": False,
+            "mx_records": False,
+            "mx_status": mx_status,
+        }
+    )
+
+    assert result["risk_score"] == 0
+    assert result["trust_level"] == "low"
+    assert result["flags"] == []
+
+
+def test_confirmed_missing_mx_increases_email_risk():
+    result = compute_risk(
+        email_data={
+            "valid_format": True,
+            "disposable": False,
+            "mx_records": False,
+            "mx_status": "missing",
+        }
+    )
+
+    assert result["risk_score"] == 20
+    assert result["flags"] == ["no_mx_records"]
+
+
+def test_disposable_email_and_missing_mx_scores_accumulate():
+    result = compute_risk(
+        email_data={
+            "valid_format": True,
+            "disposable": True,
+            "mx_records": False,
+            "mx_status": "missing",
+        }
+    )
+
+    assert result["risk_score"] == 45
+    assert result["flags"] == ["disposable_email", "no_mx_records"]
+
+
+def test_invalid_email_not_checked_for_mx_does_not_add_missing_mx_penalty():
+    result = compute_risk(
+        email_data={
+            "valid_format": False,
+            "disposable": False,
+            "mx_records": False,
+            "mx_status": "not_checked",
+        }
+    )
+
+    assert result["risk_score"] == 30
+    assert result["flags"] == ["email_invalid"]
+
+
+def test_legacy_email_without_mx_status_retains_previous_scoring():
+    result = compute_risk(
+        email_data={
+            "valid_format": True,
+            "disposable": False,
+            "mx_records": False,
+        }
+    )
+
+    assert result["risk_score"] == 20
+    assert result["flags"] == ["no_mx_records"]
