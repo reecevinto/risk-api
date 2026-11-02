@@ -326,3 +326,120 @@ def test_legacy_email_without_mx_status_retains_previous_scoring():
 
     assert result["risk_score"] == 20
     assert result["flags"] == ["no_mx_records"]
+
+
+# ============================================================
+# PHASE 3 DAY 12 — REGIONAL RISK FAIRNESS
+# ============================================================
+
+@pytest.mark.parametrize(
+    "phone_data",
+    [
+        {
+            "risk_flag": "low",
+            "country": "KE",
+            "carrier": "Safaricom",
+            "line_type": "mobile",
+            "is_african_region": True,
+        },
+        {
+            "risk_flag": "low",
+            "country": "NG",
+            "carrier": "MTN",
+            "line_type": "mobile",
+            "is_african_region": True,
+            "carrier_status": "identified",
+        },
+        {
+            "risk_flag": "low",
+            "country": "ZA",
+            "carrier": "Vodacom",
+            "line_type": "mobile",
+            "is_african_region": True,
+            "regional_intelligence": {
+                "continent": "Africa",
+                "african_region": "Southern Africa",
+            },
+        },
+        {
+            "risk_flag": "low",
+            "country": "KE",
+            "carrier": "unknown",
+            "line_type": "unknown",
+            "is_african_region": True,
+            "carrier_status": "unknown",
+        },
+    ],
+)
+def test_african_phone_metadata_does_not_increase_risk(phone_data):
+    result = compute_risk(phone_data=phone_data)
+
+    assert result == {
+        "risk_score": 0,
+        "trust_level": "low",
+        "flags": [],
+    }
+
+
+@pytest.mark.parametrize(
+    "line_type",
+    [
+        "mobile",
+        "fixed_line",
+        "fixed_line_or_mobile",
+        "voip",
+        "toll_free",
+        "unknown",
+    ],
+)
+def test_phone_line_type_alone_does_not_increase_risk(line_type):
+    result = compute_risk(
+        phone_data={
+            "risk_flag": "low",
+            "line_type": line_type,
+        }
+    )
+
+    assert result["risk_score"] == 0
+    assert result["flags"] == []
+
+
+def test_invalid_african_phone_retains_existing_invalid_number_penalty():
+    result = compute_risk(
+        phone_data={
+            "risk_flag": "high",
+            "country": "KE",
+            "carrier": "unknown",
+            "line_type": "unknown",
+            "is_african_region": True,
+        }
+    )
+
+    assert result["risk_score"] == 30
+    assert result["trust_level"] == "low"
+    assert result["flags"] == ["phone_invalid"]
+
+
+def test_valid_african_phone_does_not_change_existing_email_ip_scoring():
+    result = compute_risk(
+        phone_data={
+            "risk_flag": "low",
+            "country": "KE",
+            "carrier": "Safaricom",
+            "line_type": "mobile",
+            "is_african_region": True,
+        },
+        email_data={
+            "valid_format": True,
+            "disposable": False,
+            "mx_status": "present",
+        },
+        ip_data={
+            "status": "ok",
+            "is_vpn": True,
+        },
+    )
+
+    assert result["risk_score"] == 30
+    assert result["trust_level"] == "low"
+    assert result["flags"] == ["vpn_detected"]

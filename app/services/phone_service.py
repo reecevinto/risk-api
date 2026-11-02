@@ -11,6 +11,29 @@ AFRICAN_REGIONS = {
     "TN", "UG", "ZM", "ZW",
 }
 
+
+AFRICAN_SUBREGIONS = {
+    "Northern Africa": {
+        "DZ", "EG", "LY", "MA", "SD", "TN",
+    },
+    "Western Africa": {
+        "BJ", "BF", "CV", "CI", "GM", "GH", "GN", "GW",
+        "LR", "ML", "MR", "NE", "NG", "SN", "SL", "TG",
+    },
+    "Middle Africa": {
+        "AO", "CM", "CF", "TD", "CG", "CD", "GQ", "GA", "ST",
+    },
+    "Eastern Africa": {
+        "BI", "KM", "DJ", "ER", "ET", "KE", "MG", "MW",
+        "MU", "MZ", "RW", "SC", "SO", "SS", "TZ", "UG",
+        "ZM", "ZW",
+    },
+    "Southern Africa": {
+        "BW", "SZ", "LS", "NA", "ZA",
+    },
+}
+
+
 LINE_TYPE_NAMES = {
     phonenumbers.PhoneNumberType.FIXED_LINE: "fixed_line",
     phonenumbers.PhoneNumberType.MOBILE: "mobile",
@@ -27,19 +50,78 @@ LINE_TYPE_NAMES = {
 }
 
 
+POSSIBILITY_REASONS = {
+    phonenumbers.ValidationResult.IS_POSSIBLE: "possible",
+    phonenumbers.ValidationResult.IS_POSSIBLE_LOCAL_ONLY: "possible_local_only",
+    phonenumbers.ValidationResult.INVALID_COUNTRY_CODE: "invalid_country_code",
+    phonenumbers.ValidationResult.TOO_SHORT: "too_short",
+    phonenumbers.ValidationResult.TOO_LONG: "too_long",
+}
+
+
+CARRIER_LIMITATION = (
+    "Carrier attribution uses static numbering-plan metadata. "
+    "It may reflect the original number allocation rather than the "
+    "current operator because of mobile number portability. "
+    "It does not verify the live network, SIM, subscriber, or ownership."
+)
+
+
+def _regional_intelligence(
+    country: str | None,
+    country_calling_code: int | None,
+) -> dict:
+    subregion = None
+
+    if country:
+        for region_name, countries in AFRICAN_SUBREGIONS.items():
+            if country in countries:
+                subregion = region_name
+                break
+
+    is_african = country in AFRICAN_REGIONS
+
+    return {
+        "country_code": country,
+        "country_calling_code": country_calling_code,
+        "continent": (
+            "Africa"
+            if is_african
+            else "other"
+            if country
+            else "unknown"
+        ),
+        "african_region": subregion,
+        "is_african_region": is_african,
+    }
+
+
 def _empty_phone_result() -> dict:
     return {
         "phone_valid": False,
+        "number_possible": False,
+        "possibility_reason": "not_parsed",
         "country": None,
+        "country_calling_code": None,
         "carrier": None,
+        "carrier_source": "phonenumbers_metadata",
+        "carrier_status": "unknown",
+        "carrier_limitation": CARRIER_LIMITATION,
         "risk_flag": "high",
         "line_type": "unknown",
-        "carrier_source": "phonenumbers_metadata",
+        "number_type": "unknown",
         "is_african_region": False,
+        "regional_intelligence": _regional_intelligence(None, None),
     }
 
 
 def analyze_phone(phone_number: str) -> dict:
+    """
+    Enrich a phone number using locally installed numbering-plan metadata.
+
+    Carrier attribution is informational and does not establish the
+    subscriber's current mobile operator or verify a live SIM.
+    """
     if not isinstance(phone_number, str) or not phone_number.strip():
         return _empty_phone_result()
 
@@ -49,16 +131,42 @@ def analyze_phone(phone_number: str) -> dict:
         return _empty_phone_result()
 
     valid = phonenumbers.is_valid_number(parsed_number)
+    possible_reason_code = (
+        phonenumbers.is_possible_number_with_reason(parsed_number)
+    )
+    possible = phonenumbers.is_possible_number(parsed_number)
+
     country = geocoder.region_code_for_number(parsed_number) or None
-    carrier_name = carrier.name_for_number(parsed_number, "en")
+    carrier_name = carrier.name_for_number(parsed_number, "en") or None
+
     parsed_line_type = phonenumbers.number_type(parsed_number)
+    line_type = LINE_TYPE_NAMES.get(parsed_line_type, "unknown")
+
+    calling_code = parsed_number.country_code or None
 
     return {
         "phone_valid": valid,
+        "number_possible": possible,
+        "possibility_reason": POSSIBILITY_REASONS.get(
+            possible_reason_code,
+            "unknown",
+        ),
         "country": country,
+        "country_calling_code": calling_code,
         "carrier": carrier_name or "unknown",
-        "risk_flag": "low" if valid else "high",
-        "line_type": LINE_TYPE_NAMES.get(parsed_line_type, "unknown"),
         "carrier_source": "phonenumbers_metadata",
+        "carrier_status": (
+            "identified"
+            if carrier_name
+            else "unknown"
+        ),
+        "carrier_limitation": CARRIER_LIMITATION,
+        "risk_flag": "low" if valid else "high",
+        "line_type": line_type,
+        "number_type": line_type,
         "is_african_region": country in AFRICAN_REGIONS,
+        "regional_intelligence": _regional_intelligence(
+            country,
+            calling_code,
+        ),
     }
