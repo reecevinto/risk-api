@@ -8,9 +8,8 @@ from app.api.routes.auth import get_current_user
 
 from app.schemas.risky import RiskRequest
 
-from app.services.phone_service import analyze_phone
-from app.services.email_service import analyze_email
-from app.services.ip_service import analyze_ip
+from app.services.provider_orchestrator import ProviderOrchestrator
+from app.services.providers.base import ProviderCategory
 from app.services.risk_engine import compute_risk
 from app.services.log_service import log_request
 from app.services.rate_limiter import check_rate_limit
@@ -53,6 +52,9 @@ from app.services.overage_service import (
 
 router = APIRouter()
 
+# Phase 3 Day 13 - External Provider Orchestration
+provider_orchestrator = ProviderOrchestrator()
+
 
 # ============================================================
 # EXISTING TEST ENDPOINT — KEEP
@@ -77,23 +79,15 @@ def analyze_risk(
     The production endpoint is /score.
     """
 
-    phone_data = (
-        analyze_phone(phone)
-        if phone
-        else None
+    provider_result = provider_orchestrator.analyze_inputs(
+        phone=phone,
+        email=email,
+        ip=ip,
     )
 
-    email_data = (
-        analyze_email(email)
-        if email
-        else None
-    )
-
-    ip_data = (
-        analyze_ip(ip)
-        if ip
-        else None
-    )
+    phone_data = provider_result.data[ProviderCategory.PHONE]
+    email_data = provider_result.data[ProviderCategory.EMAIL]
+    ip_data = provider_result.data[ProviderCategory.IP]
 
     risk = compute_risk(
         phone_data=phone_data,
@@ -280,23 +274,15 @@ def score_risk(
     # STEP 3 — ANALYZE INPUTS
     # ========================================================
 
-    phone_data = (
-        analyze_phone(payload.phone)
-        if payload.phone
-        else None
+    provider_result = provider_orchestrator.analyze_inputs(
+        phone=payload.phone,
+        email=payload.email,
+        ip=payload.ip,
     )
 
-    email_data = (
-        analyze_email(payload.email)
-        if payload.email
-        else None
-    )
-
-    ip_data = (
-        analyze_ip(payload.ip)
-        if payload.ip
-        else None
-    )
+    phone_data = provider_result.data[ProviderCategory.PHONE]
+    email_data = provider_result.data[ProviderCategory.EMAIL]
+    ip_data = provider_result.data[ProviderCategory.IP]
 
     # ========================================================
     # STEP 4 — COMPUTE RISK

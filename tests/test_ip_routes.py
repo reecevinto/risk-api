@@ -2,10 +2,26 @@ from types import SimpleNamespace
 
 from app.api.routes import ip as ip_route
 from app.api.routes import risk as risk_route
+from app.services.providers.base import ProviderCategory
 
 
 def make_user():
     return SimpleNamespace(id=123, email="route-test@example.com")
+
+
+def make_orchestration_result(
+    *,
+    phone=None,
+    email=None,
+    ip=None,
+):
+    return SimpleNamespace(
+        data={
+            ProviderCategory.PHONE: phone,
+            ProviderCategory.EMAIL: email,
+            ProviderCategory.IP: ip,
+        }
+    )
 
 
 def test_ip_route_returns_ip_intelligence_result(monkeypatch):
@@ -49,10 +65,17 @@ def test_risk_analyze_route_applies_ip_risk_signals(monkeypatch):
         "country_mismatch": False,
     }
 
+    orchestration_calls = []
+
+    def fake_analyze_inputs(**kwargs):
+        orchestration_calls.append(kwargs)
+
+        return make_orchestration_result(ip=ip_result)
+
     monkeypatch.setattr(
-        risk_route,
-        "analyze_ip",
-        lambda ip: ip_result,
+        risk_route.provider_orchestrator,
+        "analyze_inputs",
+        fake_analyze_inputs,
     )
 
     response = risk_route.analyze_risk(
@@ -63,6 +86,14 @@ def test_risk_analyze_route_applies_ip_risk_signals(monkeypatch):
         user=make_user(),
     )
 
+    assert orchestration_calls == [
+        {
+            "phone": None,
+            "email": None,
+            "ip": "8.8.8.8",
+        }
+    ]
+
     assert response["input"]["ip"] == "8.8.8.8"
     assert response["risk_analysis"]["risk_score"] == 30
     assert response["risk_analysis"]["trust_level"] == "low"
@@ -71,9 +102,6 @@ def test_risk_analyze_route_applies_ip_risk_signals(monkeypatch):
 
 
 def test_production_score_route_integrates_ip_intelligence(monkeypatch):
-    from datetime import datetime, timezone
-    from types import SimpleNamespace
-
     from fastapi import Request
 
     from app.schemas.risky import RiskRequest
@@ -113,7 +141,12 @@ def test_production_score_route_integrates_ip_intelligence(monkeypatch):
     }
 
     logged_requests = []
-    analyzed_ips = []
+    orchestration_calls = []
+
+    def fake_analyze_inputs(**kwargs):
+        orchestration_calls.append(kwargs)
+
+        return make_orchestration_result(ip=ip_result)
 
     monkeypatch.setattr(
         risk_route,
@@ -135,9 +168,9 @@ def test_production_score_route_integrates_ip_intelligence(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        risk_route,
-        "analyze_ip",
-        lambda ip: analyzed_ips.append(ip) or ip_result,
+        risk_route.provider_orchestrator,
+        "analyze_inputs",
+        fake_analyze_inputs,
     )
     monkeypatch.setattr(
         risk_route,
@@ -211,7 +244,14 @@ def test_production_score_route_integrates_ip_intelligence(monkeypatch):
         user=user,
     )
 
-    assert analyzed_ips == ["8.8.8.8"]
+    assert orchestration_calls == [
+        {
+            "phone": None,
+            "email": None,
+            "ip": "8.8.8.8",
+        }
+    ]
+
     assert response["ip_analysis"] == ip_result
     assert response["risk_analysis"]["risk_score"] == 30
     assert response["risk_analysis"]["flags"] == ["vpn_detected"]

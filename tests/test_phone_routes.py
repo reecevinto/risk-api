@@ -5,6 +5,7 @@ from fastapi import Request
 from app.api.routes import phone as phone_route
 from app.api.routes import risk as risk_route
 from app.schemas.risky import RiskRequest
+from app.services.providers.base import ProviderCategory
 
 
 def make_user():
@@ -43,6 +44,21 @@ def make_phone_result():
     }
 
 
+def make_orchestration_result(
+    *,
+    phone=None,
+    email=None,
+    ip=None,
+):
+    return SimpleNamespace(
+        data={
+            ProviderCategory.PHONE: phone,
+            ProviderCategory.EMAIL: email,
+            ProviderCategory.IP: ip,
+        }
+    )
+
+
 def test_phone_route_returns_complete_phone_intelligence(monkeypatch):
     expected_result = make_phone_result()
     analyzed_numbers = []
@@ -78,16 +94,17 @@ def test_phone_route_returns_complete_phone_intelligence(monkeypatch):
 
 def test_legacy_risk_analyze_uses_enriched_phone_result(monkeypatch):
     phone_result = make_phone_result()
-    analyzed_numbers = []
+    orchestration_calls = []
 
-    def fake_analyze_phone(number):
-        analyzed_numbers.append(number)
-        return phone_result
+    def fake_analyze_inputs(**kwargs):
+        orchestration_calls.append(kwargs)
+
+        return make_orchestration_result(phone=phone_result)
 
     monkeypatch.setattr(
-        risk_route,
-        "analyze_phone",
-        fake_analyze_phone,
+        risk_route.provider_orchestrator,
+        "analyze_inputs",
+        fake_analyze_inputs,
     )
 
     response = risk_route.analyze_risk(
@@ -98,7 +115,14 @@ def test_legacy_risk_analyze_uses_enriched_phone_result(monkeypatch):
         user=make_user(),
     )
 
-    assert analyzed_numbers == ["+254712345678"]
+    assert orchestration_calls == [
+        {
+            "phone": "+254712345678",
+            "email": None,
+            "ip": None,
+        }
+    ]
+
     assert response["input"]["phone"] == "+254712345678"
     assert response["input"]["email"] is None
     assert response["input"]["ip"] is None
@@ -130,8 +154,13 @@ def test_production_score_route_returns_phone_intelligence_and_logs_once(
     )
 
     phone_result = make_phone_result()
-    analyzed_numbers = []
+    orchestration_calls = []
     logged_requests = []
+
+    def fake_analyze_inputs(**kwargs):
+        orchestration_calls.append(kwargs)
+
+        return make_orchestration_result(phone=phone_result)
 
     monkeypatch.setattr(
         risk_route,
@@ -152,15 +181,10 @@ def test_production_score_route_returns_phone_intelligence_and_logs_once(
             "device_hash": "test-device-hash",
         },
     )
-
-    def fake_analyze_phone(number):
-        analyzed_numbers.append(number)
-        return phone_result
-
     monkeypatch.setattr(
-        risk_route,
-        "analyze_phone",
-        fake_analyze_phone,
+        risk_route.provider_orchestrator,
+        "analyze_inputs",
+        fake_analyze_inputs,
     )
     monkeypatch.setattr(
         risk_route,
@@ -234,7 +258,14 @@ def test_production_score_route_returns_phone_intelligence_and_logs_once(
         user=user,
     )
 
-    assert analyzed_numbers == ["+254712345678"]
+    assert orchestration_calls == [
+        {
+            "phone": "+254712345678",
+            "email": None,
+            "ip": None,
+        }
+    ]
+
     assert response["input"]["phone"] == "+254712345678"
     assert response["phone_analysis"] == phone_result
     assert response["phone_analysis"]["carrier"] == "Safaricom"
