@@ -60,6 +60,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
     JSON,
     String,
@@ -76,6 +77,17 @@ class RequestLog(Base):
     """
 
     __tablename__ = "request_logs"
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["user_id", "device_id"],
+            [
+                "device_fingerprints.user_id",
+                "device_fingerprints.id",
+            ],
+            name="fk_request_logs_user_device",
+        ),
+    )
 
     # ========================================================
     # PRIMARY KEY
@@ -210,6 +222,5 @@ class RequestLog(Base):
 
     device_id = Column(
         Integer,
-        ForeignKey("device_fingerprints.id"),
         nullable=True,
     )

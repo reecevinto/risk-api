@@ -55,6 +55,7 @@ from sqlalchemy import (
     DateTime,
     Boolean,
     ForeignKey,
+    UniqueConstraint,
 )
 
 from sqlalchemy.sql import func
@@ -72,6 +73,19 @@ class DeviceFingerprint(Base):
     """
 
     __tablename__ = "device_fingerprints"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "device_hash",
+            name="uq_device_fingerprints_user_id_device_hash",
+        ),
+        UniqueConstraint(
+            "user_id",
+            "id",
+            name="uq_device_fingerprints_user_id_id",
+        ),
+    )
 
     # ========================================================
     # PRIMARY KEY
@@ -115,7 +129,7 @@ class DeviceFingerprint(Base):
     device_hash = Column(
         String,
         nullable=False,
-        unique=True,
+        unique=False,
         index=True,
     )
 
