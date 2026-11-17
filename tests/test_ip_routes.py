@@ -96,7 +96,8 @@ def test_risk_analyze_route_applies_ip_risk_signals(monkeypatch):
 
     assert response["input"]["ip"] == "8.8.8.8"
     assert response["risk_analysis"]["risk_score"] == 30
-    assert response["risk_analysis"]["trust_level"] == "low"
+    assert response["risk_analysis"]["fraud_probability"] == 0.3
+    assert response["risk_analysis"]["trust_level"] == "high"
     assert response["risk_analysis"]["flags"] == ["vpn_detected"]
     assert response["user"]["id"] == 123
 
@@ -254,6 +255,8 @@ def test_production_score_route_integrates_ip_intelligence(monkeypatch):
 
     assert response["ip_analysis"] == ip_result
     assert response["risk_analysis"]["risk_score"] == 30
+    assert response["risk_analysis"]["fraud_probability"] == 0.3
+    assert response["risk_analysis"]["trust_level"] == "high"
     assert response["risk_analysis"]["flags"] == ["vpn_detected"]
     assert response["behavior_risk_score"] == 5
     assert response["behavior_flags"] == [
@@ -264,4 +267,6 @@ def test_production_score_route_integrates_ip_intelligence(monkeypatch):
     assert response["billing"]["usage"] == 1
     assert len(logged_requests) == 1
     assert logged_requests[0]["user_id"] == user.id
+    assert logged_requests[0]["risk"]["risk_score"] == 30
+    assert logged_requests[0]["risk"]["trust_level"] == "low"
     assert logged_requests[0]["device_id"] == device.id

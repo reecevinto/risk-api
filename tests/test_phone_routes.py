@@ -127,6 +127,8 @@ def test_legacy_risk_analyze_uses_enriched_phone_result(monkeypatch):
     assert response["input"]["email"] is None
     assert response["input"]["ip"] is None
     assert response["risk_analysis"]["risk_score"] == 0
+    assert response["risk_analysis"]["fraud_probability"] == 0.0
+    assert response["risk_analysis"]["trust_level"] == "high"
     assert response["risk_analysis"]["flags"] == []
     assert response["user"]["id"] == 123
 
@@ -275,9 +277,13 @@ def test_production_score_route_returns_phone_intelligence_and_logs_once(
     ] == "Eastern Africa"
 
     assert response["risk_analysis"]["risk_score"] == 0
+    assert response["risk_analysis"]["fraud_probability"] == 0.0
+    assert response["risk_analysis"]["trust_level"] == "high"
     assert response["risk_analysis"]["flags"] == []
 
     assert len(logged_requests) == 1
     assert logged_requests[0]["user_id"] == user.id
+    assert logged_requests[0]["risk"]["risk_score"] == 0
+    assert logged_requests[0]["risk"]["trust_level"] == "low"
     assert logged_requests[0]["phone"] == "+254712345678"
     assert logged_requests[0]["device_id"] == device.id

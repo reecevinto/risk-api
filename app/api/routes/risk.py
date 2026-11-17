@@ -11,6 +11,7 @@ from app.schemas.risky import RiskRequest
 from app.services.provider_orchestrator import ProviderOrchestrator
 from app.services.providers.base import ProviderCategory
 from app.services.risk_engine import compute_risk
+from app.services.risk_contract import build_public_risk_contract
 from app.services.log_service import log_request
 from app.services.rate_limiter import check_rate_limit
 
@@ -101,7 +102,7 @@ def analyze_risk(
             "email": email,
             "ip": ip,
         },
-        "risk_analysis": risk,
+        "risk_analysis": build_public_risk_contract(risk),
         "user": {
             "id": user.id,
             "email": user.email,
@@ -427,7 +428,7 @@ def score_risk(
 
         "ip_analysis": ip_data,
 
-        "risk_analysis": risk,
+        "risk_analysis": build_public_risk_contract(risk),
 
         # ====================================================
         # BEHAVIORAL RISK INTELLIGENCE
