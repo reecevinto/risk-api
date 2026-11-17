@@ -75,23 +75,18 @@ are NOT used.
 
 IMPORTANT SHARED-DEVICE NOTE
 ----------------------------
-The current DeviceFingerprint schema still has a UNIQUE
-constraint on device_hash.
+DeviceFingerprint represents a user-owned association.
 
-Therefore, the current database can represent one
-DeviceFingerprint row per unique device_hash.
+The database enforces uniqueness on (user_id, device_hash),
+rather than on device_hash globally. Consequently, the same
+fingerprint hash can be associated with multiple users while
+each user's trust state, block state, and activity counters
+remain independent.
 
-The shared-device methods below intentionally remain part of
-the intelligence layer because shared-device detection is part
-of the target architecture.
-
-However, until the later device-identity architecture phase
-introduces a proper user ↔ device association model, the
-current UNIQUE device_hash constraint limits how many users can
-be represented against the same physical fingerprint.
-
-This file therefore does NOT attempt to solve that schema
-change prematurely.
+The shared-device methods below count distinct users associated
+with a matching hash. A shared fingerprint is an intelligence
+signal, not proof that multiple accounts belong to the same
+person or that the same physical device is involved.
 
 IMPORTANT BILLING RULE
 ----------------------
@@ -166,27 +161,20 @@ class DeviceIntelligenceService:
         Count the number of unique users associated with a
         device hash.
 
-        Intended future intelligence:
+        Interpretation:
 
             1 user
-                → normal
+                -> no cross-user sharing signal
 
             multiple users
-                → potentially shared device
+                -> potentially shared fingerprint
 
             many users
-                → potentially suspicious device reuse
+                -> potentially suspicious fingerprint reuse
 
-        IMPORTANT
-        ---------
-        The current DeviceFingerprint model has device_hash
-        marked UNIQUE. Therefore, the current schema can only
-        represent one DeviceFingerprint row for a given hash.
-
-        This method is intentionally retained because shared
-        device detection is part of the target architecture and
-        will become meaningful once the user ↔ device association
-        architecture is expanded.
+        The count is based on distinct user IDs. A matching
+        fingerprint is a signal for further analysis, not proof
+        of a shared physical device or common account ownership.
         """
 
         if not device_hash:
@@ -276,11 +264,9 @@ class DeviceIntelligenceService:
         Return DeviceFingerprint records associated with a
         device hash.
 
-        This method is intentionally retained for future
-        shared-device intelligence.
-
-        Under the current UNIQUE device_hash schema, this will
-        normally return at most one DeviceFingerprint row.
+        Each returned row represents one user's association
+        with the matching fingerprint hash. Multiple rows may
+        therefore be returned when users share the same hash.
         """
 
         if not device_hash:
@@ -319,12 +305,10 @@ class DeviceIntelligenceService:
             • Credential-sharing detection
             • Multi-account detection
 
-        NOTE
-        ----
-        The current UNIQUE device_hash constraint prevents the
-        present schema from representing multiple users against
-        one hash. The method therefore remains future-ready
-        rather than introducing an incorrect schema workaround.
+        The count uses distinct user IDs associated with the
+        hash. Reaching the threshold identifies a shared-
+        fingerprint signal; it does not establish that the
+        accounts belong to one person or use one physical device.
         """
 
         if threshold < 1:

@@ -411,6 +411,10 @@ def score_risk(
         user,
     )
 
+    # Commit device activity and the request log together,
+    # only after analysis and usage reads have succeeded.
+    db.commit()
+
     # ========================================================
     # STEP 7 — RESPONSE
     # ========================================================

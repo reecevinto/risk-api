@@ -69,6 +69,8 @@ import json
 import re
 from datetime import datetime, timezone
 
+from sqlalchemy import func, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.device_fingerprint import DeviceFingerprint
@@ -310,24 +312,21 @@ def _normalize_platform(platform: str) -> str:
 
 def get_device_by_hash(
     db: Session,
+    user_id: int,
     device_hash: str,
 ) -> DeviceFingerprint | None:
     """
-    Retrieve an existing device using its canonical hash.
+    Retrieve a device using its owner and canonical hash.
 
-    The current database schema defines device_hash as UNIQUE,
-    therefore lookup is intentionally global rather than
-    user-scoped.
-
-    Returns
-    -------
-    DeviceFingerprint | None
+    Fingerprint hashes may be shared by multiple user
+    associations. Every lookup must therefore be user-scoped.
     """
 
     return (
         db.query(DeviceFingerprint)
         .filter(
-            DeviceFingerprint.device_hash == device_hash
+            DeviceFingerprint.user_id == user_id,
+            DeviceFingerprint.device_hash == device_hash,
         )
         .first()
     )
@@ -349,26 +348,14 @@ def register_device(
     platform: str,
 ) -> DeviceFingerprint:
     """
-    Register a brand-new device.
+    Register a new user-owned device association.
 
-    Only fields that actually exist in the current
-    DeviceFingerprint model are persisted.
-
-    The raw User-Agent is never stored directly.
+    The caller owns the transaction. This helper flushes to
+    obtain the generated ID but does not commit.
     """
 
-    browser, browser_version = _parse_browser(
-        user_agent
-    )
-
-    os_name, os_version = _parse_os(
-        user_agent
-    )
-
-    normalized_platform = _normalize_platform(
-        platform
-    )
-
+    browser, browser_version = _parse_browser(user_agent)
+    os_name, os_version = _parse_os(user_agent)
     now = datetime.now(timezone.utc)
 
     device = DeviceFingerprint(
@@ -378,7 +365,7 @@ def register_device(
         browser_version=browser_version,
         os=os_name,
         os_version=os_version,
-        platform=normalized_platform,
+        platform=_normalize_platform(platform),
         language=accept_language or None,
         timezone=timezone_name or None,
         screen_resolution=screen_resolution or None,
@@ -390,8 +377,7 @@ def register_device(
     )
 
     db.add(device)
-    db.commit()
-    db.refresh(device)
+    db.flush()
 
     return device
 
@@ -411,64 +397,70 @@ def update_device_activity(
     platform: str | None = None,
 ) -> DeviceFingerprint:
     """
-    Update activity for an already-known device.
+    Atomically update activity for an existing device association.
 
-    Every associated API request increments:
-
-    • request_count
-    • last_seen
-
-    Device metadata is refreshed when supplied.
-
-    IMPORTANT
-    ---------
-    This function does NOT create a RequestLog.
-
-    RequestLog remains the canonical billing/metering source.
+    The request counter is incremented in the database to avoid
+    lost updates under concurrent requests. The caller owns the
+    transaction; this helper does not commit.
     """
 
-    device.request_count = (
-        device.request_count or 0
-    ) + 1
-
-    device.last_seen = datetime.now(
-        timezone.utc
-    )
+    values = {
+        "request_count": func.coalesce(
+            DeviceFingerprint.request_count,
+            0,
+        ) + 1,
+        "last_seen": datetime.now(timezone.utc),
+    }
 
     if user_agent:
-        browser, browser_version = _parse_browser(
-            user_agent
-        )
+        browser, browser_version = _parse_browser(user_agent)
+        os_name, os_version = _parse_os(user_agent)
 
-        os_name, os_version = _parse_os(
-            user_agent
+        values.update(
+            {
+                "browser": browser,
+                "browser_version": browser_version,
+                "os": os_name,
+                "os_version": os_version,
+            }
         )
-
-        device.browser = browser
-        device.browser_version = browser_version
-        device.os = os_name
-        device.os_version = os_version
 
     if accept_language:
-        device.language = accept_language
+        values["language"] = accept_language
 
     if screen_resolution:
-        device.screen_resolution = (
-            screen_resolution
-        )
+        values["screen_resolution"] = screen_resolution
 
     if timezone_name:
-        device.timezone = timezone_name
+        values["timezone"] = timezone_name
 
     if platform:
-        device.platform = _normalize_platform(
-            platform
+        values["platform"] = _normalize_platform(platform)
+
+    result = db.execute(
+        update(DeviceFingerprint)
+        .where(
+            DeviceFingerprint.id == device.id,
+            DeviceFingerprint.user_id == device.user_id,
         )
+        .values(**values)
+        .returning(DeviceFingerprint.id)
+        .execution_options(synchronize_session=False)
+    )
 
-    db.commit()
-    db.refresh(device)
+    updated_id = result.scalar_one_or_none()
+    if updated_id is None:
+        raise RuntimeError("Device activity update found no device row.")
 
-    return device
+    return (
+        db.query(DeviceFingerprint)
+        .populate_existing()
+        .filter(
+            DeviceFingerprint.id == updated_id,
+            DeviceFingerprint.user_id == device.user_id,
+        )
+        .one()
+    )
 
 
 # ============================================================
@@ -486,30 +478,13 @@ def get_or_create_device(
     platform: str,
 ):
     """
-    Identify the current device.
+    Identify or create the device association owned by this user.
 
-    Workflow
-    --------
-    1. Build deterministic device hash.
-    2. Search for the hash.
-    3. If the device exists: update activity.
-    4. If the device does not exist: register it.
+    PostgreSQL ON CONFLICT handles concurrent registration for
+    the same user/hash pair. Existing associations are updated
+    with an atomic request-counter increment.
 
-    Returns
-    -------
-    dict
-        {
-            "device": DeviceFingerprint,
-            "is_new_device": bool,
-            "device_hash": str
-        }
-
-    IMPORTANT
-    ---------
-    Device identification does not create a RequestLog.
-
-    The caller is responsible for creating the normal
-    RequestLog for the actual API request.
+    This function does not commit. The caller owns the transaction.
     """
 
     device_hash = generate_device_hash(
@@ -520,15 +495,58 @@ def get_or_create_device(
         platform=platform,
     )
 
-    device = get_device_by_hash(
-        db,
-        device_hash,
+    browser, browser_version = _parse_browser(user_agent)
+    os_name, os_version = _parse_os(user_agent)
+    now = datetime.now(timezone.utc)
+
+    insert_statement = (
+        pg_insert(DeviceFingerprint)
+        .values(
+            user_id=user_id,
+            device_hash=device_hash,
+            browser=browser,
+            browser_version=browser_version,
+            os=os_name,
+            os_version=os_version,
+            platform=_normalize_platform(platform),
+            language=accept_language or None,
+            timezone=timezone_name or None,
+            screen_resolution=screen_resolution or None,
+            first_seen=now,
+            last_seen=now,
+            request_count=1,
+            is_trusted=False,
+            is_blocked=False,
+        )
+        .on_conflict_do_nothing(
+            index_elements=[
+                DeviceFingerprint.user_id,
+                DeviceFingerprint.device_hash,
+            ]
+        )
+        .returning(DeviceFingerprint.id)
     )
 
-    if device is not None:
-        update_device_activity(
+    inserted_id = db.execute(insert_statement).scalar_one_or_none()
+
+    if inserted_id is not None:
+        device_id = inserted_id
+        is_new_device = True
+    else:
+        existing_device = get_device_by_hash(
             db,
-            device,
+            user_id,
+            device_hash,
+        )
+
+        if existing_device is None:
+            raise RuntimeError(
+                "Device association disappeared during conflict handling."
+            )
+
+        updated_device = update_device_activity(
+            db,
+            existing_device,
             user_agent=user_agent,
             accept_language=accept_language,
             screen_resolution=screen_resolution,
@@ -536,26 +554,22 @@ def get_or_create_device(
             platform=platform,
         )
 
-        return {
-            "device": device,
-            "is_new_device": False,
-            "device_hash": device_hash,
-        }
+        device_id = updated_device.id
+        is_new_device = False
 
-    device = register_device(
-        db=db,
-        user_id=user_id,
-        device_hash=device_hash,
-        user_agent=user_agent,
-        accept_language=accept_language,
-        screen_resolution=screen_resolution,
-        timezone_name=timezone_name,
-        platform=platform,
+    device = (
+        db.query(DeviceFingerprint)
+        .populate_existing()
+        .filter(
+            DeviceFingerprint.id == device_id,
+            DeviceFingerprint.user_id == user_id,
+        )
+        .one()
     )
 
     return {
         "device": device,
-        "is_new_device": True,
+        "is_new_device": is_new_device,
         "device_hash": device_hash,
     }
 
@@ -574,9 +588,6 @@ def mark_device_as_trusted(
 
     device.is_trusted = True
 
-    db.commit()
-    db.refresh(device)
-
     return device
 
 
@@ -589,9 +600,6 @@ def mark_device_as_untrusted(
     """
 
     device.is_trusted = False
-
-    db.commit()
-    db.refresh(device)
 
     return device
 
@@ -610,9 +618,6 @@ def mark_device_as_blocked(
 
     device.is_blocked = True
 
-    db.commit()
-    db.refresh(device)
-
     return device
 
 
@@ -625,9 +630,6 @@ def mark_device_as_unblocked(
     """
 
     device.is_blocked = False
-
-    db.commit()
-    db.refresh(device)
 
     return device
 

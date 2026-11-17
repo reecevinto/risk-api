@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from app.api.routes import ip as ip_route
 from app.api.routes import risk as risk_route
 from app.services.providers.base import ProviderCategory
@@ -142,6 +144,22 @@ def test_production_score_route_integrates_ip_intelligence(monkeypatch):
     }
 
     logged_requests = []
+    transaction_events = []
+
+    def fake_log_request(**kwargs):
+        transaction_events.append("log_request")
+        logged_requests.append(kwargs)
+
+    def fake_get_current_usage(db, user):
+        transaction_events.append("get_current_usage")
+        return 1
+
+    def fake_get_plan_limit(user):
+        transaction_events.append("get_plan_limit")
+        return 100
+
+    def fake_commit():
+        transaction_events.append("commit")
     orchestration_calls = []
 
     def fake_analyze_inputs(**kwargs):
@@ -212,17 +230,17 @@ def test_production_score_route_integrates_ip_intelligence(monkeypatch):
     monkeypatch.setattr(
         risk_route,
         "log_request",
-        lambda **kwargs: logged_requests.append(kwargs),
+        fake_log_request,
     )
     monkeypatch.setattr(
         risk_route,
         "get_current_usage",
-        lambda db, user: 1,
+        fake_get_current_usage,
     )
     monkeypatch.setattr(
         risk_route,
         "get_plan_limit",
-        lambda user: 100,
+        fake_get_plan_limit,
     )
 
     request = Request(
@@ -241,9 +259,16 @@ def test_production_score_route_integrates_ip_intelligence(monkeypatch):
     response = risk_route.score_risk(
         payload=RiskRequest(ip="8.8.8.8"),
         request=request,
-        db=object(),
+        db=SimpleNamespace(commit=fake_commit),
         user=user,
     )
+
+    assert transaction_events == [
+        "log_request",
+        "get_current_usage",
+        "get_plan_limit",
+        "commit",
+    ]
 
     assert orchestration_calls == [
         {
@@ -270,3 +295,79 @@ def test_production_score_route_integrates_ip_intelligence(monkeypatch):
     assert logged_requests[0]["risk"]["risk_score"] == 30
     assert logged_requests[0]["risk"]["trust_level"] == "low"
     assert logged_requests[0]["device_id"] == device.id
+
+
+def test_provider_failure_does_not_log_or_commit(monkeypatch):
+    from fastapi import Request
+
+    from app.schemas.risky import RiskRequest
+
+    user = SimpleNamespace(
+        id=123,
+        email="route-test@example.com",
+        plan_id=1,
+    )
+    device = SimpleNamespace(id=456)
+
+    events = []
+
+    monkeypatch.setattr(
+        risk_route,
+        "can_make_request",
+        lambda db, user: True,
+    )
+    monkeypatch.setattr(
+        risk_route,
+        "check_rate_limit",
+        lambda user_id: True,
+    )
+    monkeypatch.setattr(
+        risk_route,
+        "get_or_create_device",
+        lambda **kwargs: {
+            "device": device,
+            "is_new_device": True,
+            "device_hash": "test-device-hash",
+        },
+    )
+
+    def fail_provider_analysis(**kwargs):
+        events.append("provider_failure")
+        raise RuntimeError("Provider analysis failed.")
+
+    monkeypatch.setattr(
+        risk_route.provider_orchestrator,
+        "analyze_inputs",
+        fail_provider_analysis,
+    )
+    monkeypatch.setattr(
+        risk_route,
+        "log_request",
+        lambda **kwargs: events.append("log_request"),
+    )
+
+    def fake_commit():
+        events.append("commit")
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/risk/score",
+            "scheme": "http",
+            "server": ("testserver", 80),
+            "client": ("testclient", 12345),
+            "query_string": b"",
+            "headers": [(b"user-agent", b"pytest")],
+        }
+    )
+
+    with pytest.raises(RuntimeError, match="Provider analysis failed"):
+        risk_route.score_risk(
+            payload=RiskRequest(ip="8.8.8.8"),
+            request=request,
+            db=SimpleNamespace(commit=fake_commit),
+            user=user,
+        )
+
+    assert events == ["provider_failure"]

@@ -158,6 +158,22 @@ def test_production_score_route_returns_phone_intelligence_and_logs_once(
     phone_result = make_phone_result()
     orchestration_calls = []
     logged_requests = []
+    transaction_events = []
+
+    def fake_log_request(**kwargs):
+        transaction_events.append("log_request")
+        logged_requests.append(kwargs)
+
+    def fake_get_current_usage(db, user):
+        transaction_events.append("get_current_usage")
+        return 1
+
+    def fake_get_plan_limit(user):
+        transaction_events.append("get_plan_limit")
+        return 100
+
+    def fake_commit():
+        transaction_events.append("commit")
 
     def fake_analyze_inputs(**kwargs):
         orchestration_calls.append(kwargs)
@@ -227,17 +243,17 @@ def test_production_score_route_returns_phone_intelligence_and_logs_once(
     monkeypatch.setattr(
         risk_route,
         "log_request",
-        lambda **kwargs: logged_requests.append(kwargs),
+        fake_log_request,
     )
     monkeypatch.setattr(
         risk_route,
         "get_current_usage",
-        lambda db, user: 1,
+        fake_get_current_usage,
     )
     monkeypatch.setattr(
         risk_route,
         "get_plan_limit",
-        lambda user: 100,
+        fake_get_plan_limit,
     )
 
     request = Request(
@@ -256,9 +272,16 @@ def test_production_score_route_returns_phone_intelligence_and_logs_once(
     response = risk_route.score_risk(
         payload=RiskRequest(phone="+254712345678"),
         request=request,
-        db=object(),
+        db=SimpleNamespace(commit=fake_commit),
         user=user,
     )
+
+    assert transaction_events == [
+        "log_request",
+        "get_current_usage",
+        "get_plan_limit",
+        "commit",
+    ]
 
     assert orchestration_calls == [
         {

@@ -8,11 +8,12 @@ Device Fingerprinting System
 
 Purpose
 -------
-This model stores a permanent identity for every browser/device
-that communicates with the Risk Intelligence API.
+This model stores a user-owned association with a browser/device
+fingerprint that communicates with the Risk Intelligence API.
 
 Unlike RequestLog, which records every individual request,
-DeviceFingerprint represents the long-term identity of the device.
+DeviceFingerprint represents a user's long-term association with the
+device fingerprint.
 
 Relationship
 
@@ -65,11 +66,13 @@ from app.db.base import Base
 
 class DeviceFingerprint(Base):
     """
-    Permanent device identity.
+    User-owned device fingerprint association.
 
-    One row represents one browser/device.
+    One row represents one user's association with a browser/device
+    fingerprint. The same fingerprint may have associations for
+    multiple users.
 
-    Request logs link to this model through device_id.
+    Request logs link to this model through device_id and user_id.
     """
 
     __tablename__ = "device_fingerprints"
@@ -101,10 +104,9 @@ class DeviceFingerprint(Base):
     # USER OWNER
     # ========================================================
 
-    # Device belongs to one user.
-    #
-    # Future versions may allow shared-device intelligence
-    # across accounts for fraud detection.
+    # Each association belongs to one user.
+    # The same fingerprint hash may have separate associations
+    # for multiple users, supporting shared-device intelligence.
 
     user_id = Column(
         Integer,

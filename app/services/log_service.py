@@ -80,7 +80,10 @@ def log_request(
     device_id: int | None = None,
 ) -> RequestLog:
     """
-    Persist exactly one completed API request.
+    Stage exactly one completed API request in the active transaction.
+
+    The caller owns the transaction and is responsible for committing
+    or rolling it back.
 
     Parameters
     ----------
@@ -134,7 +137,7 @@ def log_request(
     Returns
     -------
     RequestLog
-        The persisted request-log record.
+        The staged request-log record.
 
     Architecture
     ------------
@@ -219,8 +222,7 @@ def log_request(
 
     db.add(log)
 
-    db.commit()
-
-    db.refresh(log)
+    # Flush generated values while leaving transaction ownership to the caller.
+    db.flush()
 
     return log
